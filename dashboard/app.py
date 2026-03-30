@@ -11,7 +11,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from components.job_card import render_job_card
+from components.job_card import render_all_cards
 from components.sidebar import render_sidebar
 from components.stats_bar import render_stats
 from sheets_reader import load_jobs
@@ -175,6 +175,23 @@ div[data-testid="metric-container"] {
     padding: 10px !important;
     font-size: 14px !important;
   }
+}
+
+/* Kill ALL remaining white backgrounds */
+.stMarkdown > div {
+    background: #0D1117 !important;
+}
+iframe {
+    background: #0D1117 !important;
+}
+.element-container {
+    background: #0D1117 !important;
+}
+.stHtml {
+    background: #0D1117 !important;
+}
+[data-testid="stHtml"] {
+    background: #0D1117 !important;
 }
 
 /* Make all images responsive */
@@ -545,8 +562,7 @@ else:
     start    = page_idx * PAGE_SIZE
     page_df  = filtered.iloc[start : start + PAGE_SIZE]
 
-    for _, row in page_df.iterrows():
-        render_job_card(row)
+    render_all_cards(page_df)
 
     if total_pages > 1:
         st.markdown(

@@ -1,4 +1,5 @@
-"""Individual job card — mobile-responsive GitHub-dark styled HTML card."""
+"""Job cards — all 25 cards rendered in ONE st.markdown() call to prevent
+Streamlit's per-element white background wrapper from leaking through."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -16,8 +17,9 @@ _EXP_LABEL = {
 
 _CARD_CSS = """
 <style>
+.jc-wrap { background: #0D1117; }
 .job-card {
-    background: #161B22;
+    background: #161B22 !important;
     border: 0.5px solid #30363D;
     border-radius: 10px;
     padding: 16px;
@@ -35,7 +37,7 @@ _CARD_CSS = """
 .job-title {
     font-size: 15px;
     font-weight: 600;
-    color: #58A6FF;
+    color: #58A6FF !important;
     word-break: break-word;
     flex: 1;
     text-decoration: none;
@@ -44,7 +46,7 @@ _CARD_CSS = """
 .job-title:hover { text-decoration: underline; }
 .job-meta {
     font-size: 12px;
-    color: #8B949E;
+    color: #8B949E !important;
     margin-bottom: 10px;
     word-break: break-word;
 }
@@ -74,7 +76,7 @@ _CARD_CSS = """
 }
 .skills-row {
     font-size: 10px;
-    color: #484F58;
+    color: #484F58 !important;
     margin-bottom: 8px;
     word-break: break-word;
 }
@@ -88,12 +90,12 @@ _CARD_CSS = """
 }
 .posted-time {
     font-size: 10px;
-    color: #484F58;
+    color: #484F58 !important;
 }
 .apply-btn {
     font-size: 13px;
     padding: 8px 18px;
-    background: #238636;
+    background: #238636 !important;
     color: #ffffff !important;
     border: none;
     border-radius: 6px;
@@ -119,7 +121,6 @@ _CARD_CSS = """
 }
 </style>
 """
-_CSS_INJECTED = False
 
 
 def _days_ago(dt) -> str:
@@ -148,13 +149,8 @@ def _badge(text: str, bg: str, fg: str) -> str:
     )
 
 
-def render_job_card(row: pd.Series) -> None:
-    """Render one job as a mobile-responsive GitHub-dark HTML card."""
-    global _CSS_INJECTED
-    if not _CSS_INJECTED:
-        st.markdown(_CARD_CSS, unsafe_allow_html=True)
-        _CSS_INJECTED = True
-
+def _build_card(row: pd.Series) -> str:
+    """Return the HTML string for a single job card (no st.* calls)."""
     url   = row.get("url", "#") or "#"
     title = row.get("title", "Untitled") or "Untitled"
 
@@ -167,9 +163,13 @@ def render_job_card(row: pd.Series) -> None:
     loc_meta     = ", ".join(p for p in [location, region] if p)
     meta_display = " · ".join(p for p in [company_meta, loc_meta] if p)
 
-    # ── Score circle ──────────────────────────────────────────────────────────
+    # ── Score circle ──────────────────────────────────────────────────────
     score = row.get("fit_score")
-    has_score = score is not None and not (isinstance(score, float) and pd.isna(score))
+    has_score = (
+        score is not None
+        and not (isinstance(score, float) and pd.isna(score))
+        and float(score) > 0
+    )
     if has_score:
         score_int = int(score)
         if score_int >= 80:
@@ -182,7 +182,7 @@ def render_job_card(row: pd.Series) -> None:
     else:
         score_bg, score_fg, score_text = "#161B22", "#484F58", "—"
 
-    # ── Badges ────────────────────────────────────────────────────────────────
+    # ── Badges ────────────────────────────────────────────────────────────
     badges: list[str] = []
 
     wm = str(row.get("work_mode", "unknown")).lower()
@@ -218,7 +218,7 @@ def render_job_card(row: pd.Series) -> None:
 
     badges_html = "".join(badges)
 
-    # ── Skills ────────────────────────────────────────────────────────────────
+    # ── Skills ────────────────────────────────────────────────────────────
     skills = row.get("skills", [])
     if isinstance(skills, list) and skills:
         skills_str  = " · ".join(skills[:12])
@@ -226,11 +226,13 @@ def render_job_card(row: pd.Series) -> None:
     else:
         skills_html = ""
 
-    # ── Posted ────────────────────────────────────────────────────────────────
+    # ── Posted ────────────────────────────────────────────────────────────
     posted = _days_ago(row.get("date_posted"))
-    posted_html = f'<span class="posted-time">{posted}</span>' if posted else '<span></span>'
+    posted_html = (
+        f'<span class="posted-time">{posted}</span>' if posted else '<span></span>'
+    )
 
-    html = f"""
+    return f"""
 <div class="job-card">
   <div class="card-top">
     <div style="flex:1;min-width:0;">
@@ -246,6 +248,21 @@ def render_job_card(row: pd.Series) -> None:
     {posted_html}
     <a href="{url}" target="_blank" class="apply-btn">Apply</a>
   </div>
-</div>
-"""
-    st.html(html)
+</div>"""
+
+
+def render_all_cards(jobs_df: pd.DataFrame) -> None:
+    """Render all job cards in ONE st.markdown() call.
+
+    Batching into a single call means Streamlit wraps the entire block in
+    one div instead of wrapping each card individually, eliminating the
+    per-card white background that bleeds through from Streamlit's wrapper.
+    """
+    cards_html = [_build_card(row) for _, row in jobs_df.iterrows()]
+    st.markdown(
+        _CARD_CSS
+        + '<div class="jc-wrap">'
+        + "".join(cards_html)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
