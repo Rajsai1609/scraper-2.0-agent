@@ -144,4 +144,4 @@ def render_job_card(row: pd.Series) -> None:
   </div>
 </div>
 """
-    st.markdown(html, unsafe_allow_html=True)
+    st.html(html)

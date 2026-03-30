@@ -174,7 +174,7 @@ filtered = filtered.reset_index(drop=True)
 
 # ── Founder story ─────────────────────────────────────────────────────────────
 with st.expander("👤 About the builder", expanded=False):
-    st.markdown("""
+    st.html("""
 <div style="background:#161B22;border:0.5px solid #30363D;border-radius:12px;padding:28px 32px;">
 
   <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px;">
@@ -241,7 +241,7 @@ with st.expander("👤 About the builder", expanded=False):
   </div>
 
 </div>
-""", unsafe_allow_html=True)
+""")
 
 # ── How this tool gets you jobs ───────────────────────────────────────────────
 if "show_why" not in st.session_state:
@@ -253,7 +253,7 @@ if st.button(_why_label, key="toggle_why"):
     st.rerun()
 
 if st.session_state.show_why:
-    st.markdown("""
+    st.html("""
 <div style="background:#161B22;border:0.5px solid #30363D;border-radius:12px;padding:28px 32px;margin-top:4px;">
 
   <!-- Section header -->
@@ -400,7 +400,7 @@ if st.session_state.show_why:
   </div>
 
 </div>
-""", unsafe_allow_html=True)
+""")
 
 st.markdown('<hr style="border-color:#30363D;margin:20px 0 16px;">', unsafe_allow_html=True)
 
