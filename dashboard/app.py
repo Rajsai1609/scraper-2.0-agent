@@ -233,3 +233,81 @@ else:
             f'<p style="color:#8B949E;font-size:12px;text-align:center;">Page {page_idx + 1} of {total_pages} · {total_filtered} results</p>',
             unsafe_allow_html=True,
         )
+
+# ── Founder story ─────────────────────────────────────────────────────────────
+st.markdown('<hr style="border-color:#30363D;margin:32px 0 16px;">', unsafe_allow_html=True)
+
+with st.expander("👤 About the builder", expanded=False):
+    st.markdown("""
+<div style="background:#161B22;border:0.5px solid #30363D;border-radius:12px;padding:28px 32px;">
+
+  <!-- Header: avatar + name + badge -->
+  <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px;">
+    <div style="width:64px;height:64px;border-radius:50%;flex-shrink:0;
+                background:linear-gradient(135deg,#1F6FEB,#238636);
+                display:flex;align-items:center;justify-content:center;
+                font-size:22px;font-weight:700;color:#ffffff;letter-spacing:1px;">RS</div>
+    <div>
+      <div style="color:#E6EDF3;font-size:20px;font-weight:700;line-height:1.2;">Rajsai Naredla</div>
+      <div style="color:#8B949E;font-size:13px;margin-top:3px;">AI Automation Engineer &amp; AI Architect</div>
+      <div style="color:#8B949E;font-size:13px;">MCTechnology LLC · Seattle, WA</div>
+      <div style="margin-top:8px;">
+        <span style="background:#0D419D;color:#58A6FF;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:500;">
+          Indian immigrant · F1/OPT survivor
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quote -->
+  <div style="border-left:3px solid #30363D;padding-left:16px;margin-bottom:24px;">
+    <p style="color:#C9D1D9;font-size:14px;line-height:1.75;margin:0;font-style:italic;">
+      "I came to the US as an international student.<br>
+      I spent months manually checking company career<br>
+      pages one by one — searching for H1B sponsors,<br>
+      verifying STEM OPT eligibility, worrying about<br>
+      the 60-day grace period. LinkedIn had no visa<br>
+      filter. Indeed's data was wrong. No tool existed<br>
+      that understood what I was going through.<br>
+      So I built one."
+    </p>
+  </div>
+
+  <!-- Pain point cards -->
+  <div style="display:flex;gap:12px;margin-bottom:24px;">
+    <div style="flex:1;background:#0D1117;border:0.5px solid #30363D;border-radius:8px;padding:14px 16px;text-align:center;">
+      <div style="color:#58A6FF;font-size:26px;font-weight:700;">1M+</div>
+      <div style="color:#8B949E;font-size:11px;margin-top:4px;">job listings scanned with zero visa filter</div>
+    </div>
+    <div style="flex:1;background:#0D1117;border:0.5px solid #30363D;border-radius:8px;padding:14px 16px;text-align:center;">
+      <div style="color:#F85149;font-size:26px;font-weight:700;">60 days</div>
+      <div style="color:#8B949E;font-size:11px;margin-top:4px;">grace period counting down after graduation</div>
+    </div>
+    <div style="flex:1;background:#0D1117;border:0.5px solid #30363D;border-radius:8px;padding:14px 16px;text-align:center;">
+      <div style="color:#3FB950;font-size:26px;font-weight:700;">0</div>
+      <div style="color:#8B949E;font-size:11px;margin-top:4px;">tools that filtered by H-1B or STEM OPT — until now</div>
+    </div>
+  </div>
+
+  <!-- What this tool does -->
+  <div style="margin-bottom:20px;">
+    <div style="color:#E6EDF3;font-size:14px;font-weight:600;margin-bottom:12px;">What this tool does</div>
+    <ul style="color:#C9D1D9;font-size:13px;line-height:2;margin:0;padding-left:20px;">
+      <li>Scrapes 500+ job boards daily and surfaces fresh listings automatically</li>
+      <li>Flags verified H-1B sponsor history so you never apply to dead ends</li>
+      <li>Detects STEM OPT eligibility based on SOC codes and employer history</li>
+      <li>Scores each role 0–100 for fit so you apply smarter, not harder</li>
+      <li>Filters out senior/staff roles that won't clear OPT or CPT timelines</li>
+    </ul>
+  </div>
+
+  <!-- Footer -->
+  <div style="border-top:0.5px solid #30363D;padding-top:14px;color:#484F58;font-size:12px;">
+    Built by an immigrant who lived this problem ·
+    <a href="https://www.linkedin.com/in/rajsainaredla09" target="_blank"
+       style="color:#58A6FF;text-decoration:none;">linkedin.com/in/rajsainaredla09</a>
+    · MCTechnology LLC · Seattle, WA
+  </div>
+
+</div>
+""", unsafe_allow_html=True)
