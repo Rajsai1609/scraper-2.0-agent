@@ -416,7 +416,7 @@ def pipeline() -> None:
     config = _load_config()
     companies = config.get("companies", {})
 
-    total_inserted = 0
+    qualifying_jobs = []
     for platform, entries in companies.items():
         try:
             fetcher = _get_fetcher(platform)
@@ -434,8 +434,9 @@ def pipeline() -> None:
                 except Exception:
                     continue
                 if job.is_usa_job and (job.years_min is None or job.years_min <= 5):
-                    if db.insert_job(job):
-                        total_inserted += 1
+                    qualifying_jobs.append(job)
+
+    total_inserted = db.insert_jobs_batch(qualifying_jobs)
     console.print(f"  [green]{total_inserted}[/green] new jobs inserted")
 
     console.print("\n[bold cyan]--- STEP 2: Enrich ---[/bold cyan]")

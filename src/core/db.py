@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,6 +79,10 @@ _ID_COL: int = 1
 _spreadsheet: Optional[gspread.Spreadsheet] = None
 _client: Optional[gspread.Client] = None
 
+# In-memory ID cache — loaded once per process, updated on every insert
+_existing_ids: set[str] = set()
+_ids_loaded: bool = False
+
 
 # ---------------------------------------------------------------------------
 # Connection helpers
@@ -143,6 +148,17 @@ def _ensure_worksheet(name: str, headers: list[str]) -> None:
 
     if not ws.row_values(1):
         ws.append_row(headers, value_input_option="RAW")
+
+
+def _load_existing_ids() -> set[str]:
+    """Load all job IDs from the sheet into memory exactly once per process."""
+    global _existing_ids, _ids_loaded
+    if _ids_loaded:
+        return _existing_ids
+    all_ids = _get_worksheet("Jobs").col_values(_ID_COL)
+    _existing_ids = set(all_ids[1:])  # skip header row
+    _ids_loaded = True
+    return _existing_ids
 
 
 # ---------------------------------------------------------------------------
@@ -271,41 +287,83 @@ def _row_to_job(row: list[str]) -> Job:
 # ---------------------------------------------------------------------------
 
 def job_exists(job_id: str) -> bool:
-    """
-    Return True if job_id already exists in column A of the Jobs sheet.
-    Uses a single col_values() call — no cell-by-cell scan.
-    """
-    ids = _get_worksheet("Jobs").col_values(_ID_COL)
-    return job_id in ids[1:]  # ids[0] is the "id" header
+    """Return True if job_id is already in the Jobs sheet (uses in-memory cache)."""
+    return job_id in _load_existing_ids()
 
 
 def insert_job(job: Job) -> bool:
     """
     Append job as a new row.  Returns True if inserted, False if skipped
-    because the id was already present.
+    because the id was already present.  Retries once after 60 s on 429.
     """
     if job_exists(job.id):
         return False
-    _get_worksheet("Jobs").append_row(_job_to_row(job), value_input_option="RAW")
-    return True
+    ws = _get_worksheet("Jobs")
+    try:
+        ws.append_row(_job_to_row(job), value_input_option="RAW")
+        _existing_ids.add(job.id)
+        return True
+    except Exception as e:
+        if "429" in str(e) or "Quota" in str(e):
+            time.sleep(60)
+            ws.append_row(_job_to_row(job), value_input_option="RAW")
+            _existing_ids.add(job.id)
+            return True
+        raise
 
 
 def batch_insert_jobs(jobs: list[Job]) -> tuple[int, int]:
     """
     Insert all jobs that are not already in the sheet.
-    Reads existing IDs once, then appends all new rows in a single API call.
+    Uses the in-memory ID cache — no extra col_values() call.
     Returns (inserted_count, skipped_count).
     """
+    existing = _load_existing_ids()
+    new_jobs = [j for j in jobs if j.id not in existing]
+    skipped = len(jobs) - len(new_jobs)
+
+    if new_jobs:
+        ws = _get_worksheet("Jobs")
+        ws.append_rows([_job_to_row(j) for j in new_jobs], value_input_option="RAW")
+        for j in new_jobs:
+            _existing_ids.add(j.id)
+
+    return len(new_jobs), skipped
+
+
+def insert_jobs_batch(jobs: list[Job]) -> int:
+    """
+    Insert new jobs in batches of 50 rows with a 2 s pause between batches
+    to stay under the Sheets write-quota.  Uses the in-memory ID cache so
+    no col_values() call is made.  Returns the number of rows inserted.
+    """
+    existing = _load_existing_ids()
+    new_jobs = [j for j in jobs if j.id not in existing]
+    if not new_jobs:
+        return 0
+
     ws = _get_worksheet("Jobs")
-    existing_ids = set(ws.col_values(_ID_COL)[1:])  # skip header
+    rows = [_job_to_row(j) for j in new_jobs]
 
-    new_rows = [_job_to_row(j) for j in jobs if j.id not in existing_ids]
-    skipped = len(jobs) - len(new_rows)
+    batch_size = 50
+    inserted = 0
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            ws.append_rows(batch, value_input_option="RAW")
+        except Exception as e:
+            if "429" in str(e) or "Quota" in str(e):
+                time.sleep(60)
+                ws.append_rows(batch, value_input_option="RAW")
+            else:
+                raise
+        for j in new_jobs[i:i + batch_size]:
+            _existing_ids.add(j.id)
+        inserted += len(batch)
+        if i + batch_size < len(rows):
+            time.sleep(2)
 
-    if new_rows:
-        ws.append_rows(new_rows, value_input_option="RAW")
-
-    return len(new_rows), skipped
+    return inserted
 
 
 def update_job(job_id: str, updates: dict[str, Any]) -> bool:
