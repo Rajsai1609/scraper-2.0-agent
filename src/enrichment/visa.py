@@ -58,8 +58,12 @@ def enrich_job(job: Job) -> Job:
     company_lower = job.company.lower() if job.company else ""
 
     # Company name lookup takes priority over description parsing
+    # Bidirectional partial match: "Stripe, Inc." → matches "stripe"; "stripe" → matches "Stripe"
     h1b_sponsor: bool | None = None
-    if any(sponsor in company_lower for sponsor in KNOWN_H1B_SPONSORS):
+    if any(
+        sponsor in company_lower or company_lower in sponsor
+        for sponsor in KNOWN_H1B_SPONSORS
+    ):
         h1b_sponsor = True
     else:
         for p in _H1B_YES:
