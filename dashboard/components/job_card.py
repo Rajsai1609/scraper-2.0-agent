@@ -1,4 +1,4 @@
-"""Individual job card — renders one DataFrame row as a bordered container."""
+"""Individual job card — renders one DataFrame row as a GitHub-dark styled HTML card."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -6,32 +6,12 @@ from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 
-_WORK_MODE_BADGE = {
-    "remote":  "🟢 Remote",
-    "hybrid":  "🟡 Hybrid",
-    "onsite":  "🔵 Onsite",
-    "unknown": "⚪ Unknown",
-}
-
 _EXP_LABEL = {
     "new_grad": "New Grad",
     "junior":   "Junior",
     "mid":      "Mid",
     "senior":   "Senior",
     "unknown":  "",
-}
-
-_CATEGORY_LABEL = {
-    "software_engineer":  "Software Engineer",
-    "data_analyst":       "Data Analyst",
-    "data_engineer":      "Data Engineer",
-    "ml_ai_engineer":     "ML / AI Engineer",
-    "devops_cloud":       "DevOps / Cloud",
-    "frontend_engineer":  "Frontend Engineer",
-    "backend_engineer":   "Backend Engineer",
-    "fullstack_engineer": "Fullstack Engineer",
-    "product_manager":    "Product Manager",
-    "other":              "Other",
 }
 
 
@@ -54,84 +34,114 @@ def _days_ago(dt) -> str:
         return ""
 
 
+def _badge(text: str, bg: str, fg: str) -> str:
+    return (
+        f'<span style="background:{bg};color:{fg};padding:3px 9px;'
+        f'border-radius:4px;font-size:11px;font-weight:500;white-space:nowrap;">'
+        f'{text}</span>'
+    )
+
+
 def render_job_card(row: pd.Series) -> None:
-    """Render one job as a clean card with header, detail columns, and skill tags."""
-    with st.container(border=True):
+    """Render one job as a GitHub-dark HTML card."""
+    url   = row.get("url", "#") or "#"
+    title = row.get("title", "Untitled") or "Untitled"
 
-        # ── Row 1: title + work-mode badge ───────────────────────────────
-        col_title, col_badge = st.columns([5, 1])
+    company  = row.get("company", "") or ""
+    platform = row.get("ats_platform", "") or ""
+    location = row.get("location", "") or ""
+    region   = row.get("usa_region", "") or ""
 
-        with col_title:
-            url   = row.get("url", "#") or "#"
-            title = row.get("title", "Untitled") or "Untitled"
-            st.markdown(f"### [{title}]({url})")
+    company_meta = " · ".join(p for p in [company, platform] if p)
+    loc_meta     = ", ".join(p for p in [location, region] if p)
+    meta_display = " · ".join(p for p in [company_meta, loc_meta] if p)
 
-            company  = row.get("company", "")
-            platform = row.get("ats_platform", "")
-            meta = " · ".join(p for p in [company, platform] if p)
-            if meta:
-                st.caption(meta)
+    # ── Score circle ─────────────────────────────────────────────────────────
+    score = row.get("fit_score")
+    has_score = score is not None and not (isinstance(score, float) and pd.isna(score))
+    if has_score:
+        score_int = int(score)
+        if score_int >= 80:
+            score_bg, score_fg = "#033A16", "#3FB950"
+        elif score_int >= 60:
+            score_bg, score_fg = "#2D1B00", "#FFA657"
+        else:
+            score_bg, score_fg = "#161B22", "#484F58"
+        score_text = str(score_int)
+    else:
+        score_bg, score_fg, score_text = "#161B22", "#484F58", "—"
 
-        with col_badge:
-            wm = str(row.get("work_mode", "unknown")).lower()
-            st.markdown(_WORK_MODE_BADGE.get(wm, wm))
-            score = row.get("fit_score")
-            if score is not None and not (isinstance(score, float) and pd.isna(score)):
-                st.markdown(f"**Score: {int(score)}**")
+    # ── Badges ────────────────────────────────────────────────────────────────
+    badges: list[str] = []
 
-        # ── Row 2: three detail columns ───────────────────────────────────
-        col1, col2, col3 = st.columns(3)
+    wm = str(row.get("work_mode", "unknown")).lower()
+    _wm_map = {
+        "remote": ("#0C4A6E", "#58A6FF", "Remote"),
+        "hybrid": ("#2E1065", "#D2A8FF", "Hybrid"),
+        "onsite": ("#2D1B00", "#FFA657", "Onsite"),
+    }
+    if wm in _wm_map:
+        bg, fg, label = _wm_map[wm]
+        badges.append(_badge(label, bg, fg))
 
-        with col1:
-            exp_key = str(row.get("experience_level", ""))
-            exp     = _EXP_LABEL.get(exp_key, exp_key)
-            yr_min  = row.get("years_min")
-            yr_max  = row.get("years_max")
-            has_min = yr_min is not None and not (isinstance(yr_min, float) and pd.isna(yr_min))
-            has_max = yr_max is not None and not (isinstance(yr_max, float) and pd.isna(yr_max))
+    h1b = row.get("h1b_sponsor")
+    if h1b is True:
+        badges.append(_badge("H-1B ✓", "#033A16", "#3FB950"))
+    elif h1b is False:
+        badges.append(_badge("No Sponsor", "#3B0A0A", "#F85149"))
+    else:
+        badges.append(_badge("H-1B ?", "#1C2128", "#8B949E"))
 
-            if has_min:
-                yr_str = f"{int(yr_min)}"
-                if has_max:
-                    yr_str += f"–{int(yr_max)}"
-                exp_display = f"{exp} ({yr_str} yrs)" if exp else f"{yr_str} yrs"
-            else:
-                exp_display = exp
+    if row.get("opt_friendly") is True:
+        badges.append(_badge("OPT ✓", "#033A16", "#3FB950"))
+    if row.get("stem_opt_eligible") is True:
+        badges.append(_badge("STEM OPT", "#0D419D", "#58A6FF"))
 
-            if exp_display:
-                st.markdown(f"**Experience:** {exp_display}")
+    if region:
+        badges.append(_badge(region, "#1C2128", "#8B949E"))
 
-            cat_key = str(row.get("job_category", ""))
-            cat     = _CATEGORY_LABEL.get(cat_key, cat_key)
-            if cat and cat_key != "other":
-                st.markdown(f"**Category:** {cat}")
+    exp_key   = str(row.get("experience_level", ""))
+    exp_label = _EXP_LABEL.get(exp_key, exp_key)
+    if exp_label:
+        badges.append(_badge(exp_label, "#1C2128", "#484F58"))
 
-        with col2:
-            location = row.get("location", "")
-            region   = row.get("usa_region", "")
-            loc_str  = ", ".join(p for p in [location, region] if p)
-            if loc_str:
-                st.markdown(f"**Location:** {loc_str}")
+    badges_html = " ".join(badges)
 
-            posted = _days_ago(row.get("date_posted"))
-            if posted:
-                st.markdown(f"**Posted:** {posted}")
+    # ── Skills ────────────────────────────────────────────────────────────────
+    skills = row.get("skills", [])
+    if isinstance(skills, list) and skills:
+        skills_str  = " · ".join(skills[:12])
+        skills_html = f'<div style="color:#484F58;font-size:10px;margin-top:8px;">{skills_str}</div>'
+    else:
+        skills_html = ""
 
-        with col3:
-            visa_parts = []
-            if row.get("h1b_sponsor") is True:
-                visa_parts.append("H-1B ✓")
-            if row.get("opt_friendly") is True:
-                visa_parts.append("OPT ✓")
-            if row.get("stem_opt_eligible") is True:
-                visa_parts.append("STEM OPT ✓")
-            if visa_parts:
-                st.markdown(f"**Visa:** {' · '.join(visa_parts)}")
+    # ── Posted ────────────────────────────────────────────────────────────────
+    posted = _days_ago(row.get("date_posted"))
+    posted_html = (
+        f'<span style="color:#484F58;font-size:10px;">{posted}</span>'
+        if posted else '<span></span>'
+    )
 
-            if row.get("is_entry_eligible") is True:
-                st.markdown("**Entry Eligible** ✓")
-
-        # ── Row 3: skill tags ─────────────────────────────────────────────
-        skills = row.get("skills", [])
-        if isinstance(skills, list) and skills:
-            st.markdown(" ".join(f"`{s}`" for s in skills[:12]))
+    html = f"""
+<div style="background:#161B22;border:0.5px solid #30363D;border-radius:8px;padding:16px 20px;margin-bottom:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+    <div style="flex:1;min-width:0;">
+      <a href="{url}" target="_blank"
+         style="color:#58A6FF;font-size:18px;font-weight:600;text-decoration:none;word-break:break-word;">{title}</a>
+    </div>
+    <div style="background:{score_bg};color:{score_fg};width:44px;height:44px;border-radius:50%;
+                display:flex;align-items:center;justify-content:center;
+                font-weight:700;font-size:15px;flex-shrink:0;margin-left:16px;">{score_text}</div>
+  </div>
+  <div style="color:#8B949E;font-size:13px;margin-bottom:10px;">{meta_display}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;">{badges_html}</div>
+  {skills_html}
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+    {posted_html}
+    <a href="{url}" target="_blank"
+       style="background:#238636;color:#ffffff;padding:6px 14px;border-radius:6px;
+              text-decoration:none;font-size:13px;font-weight:500;">Apply</a>
+  </div>
+</div>
+"""
+    st.markdown(html, unsafe_allow_html=True)
