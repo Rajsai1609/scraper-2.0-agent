@@ -34,71 +34,134 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-/* Main background */
-.stApp { background-color: #0D1117; }
-
-/* Sidebar */
-section[data-testid="stSidebar"] {
-  background-color: #161B22;
-  border-right: 1px solid #30363D;
+/* Force dark background everywhere */
+.stApp {
+    background-color: #0D1117 !important;
 }
 
-/* Metric cards */
-div[data-testid="metric-container"] {
-  background-color: #161B22;
-  border: 0.5px solid #30363D;
-  border-radius: 8px;
-  padding: 12px 16px;
+/* Main content area */
+.main .block-container {
+    background-color: #0D1117 !important;
+    padding: 1rem !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
 }
 
-/* All text inputs and selects */
-.stSelectbox > div > div {
-  background-color: #0D1117;
-  border: 0.5px solid #30363D;
-  color: #8B949E;
+/* All white backgrounds to dark */
+div[data-testid="stVerticalBlock"] {
+    background-color: #0D1117 !important;
 }
 
-/* Buttons */
+/* Remove white card backgrounds Streamlit adds automatically */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: #0D1117 !important;
+    border: none !important;
+}
+
+/* Columns background */
+div[data-testid="column"] {
+    background-color: #0D1117 !important;
+}
+
+/* Expander background */
+div[data-testid="stExpander"] {
+    background-color: #161B22 !important;
+    border: 0.5px solid #30363D !important;
+    border-radius: 8px !important;
+}
+
+/* Expander content */
+div[data-testid="stExpanderDetails"] {
+    background-color: #161B22 !important;
+}
+
+/* Remove all white borders Streamlit adds */
+div[class*="stVerticalBlock"] > div {
+    background-color: #0D1117 !important;
+}
+
+/* Pagination buttons */
 .stButton > button {
-  background-color: #238636;
-  color: #ffffff;
-  border: none;
-  border-radius: 6px;
+    background-color: #238636 !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 6px !important;
+    width: 100% !important;
 }
 .stButton > button:hover {
-  background-color: #2EA043;
-  border: none;
+    background-color: #2EA043 !important;
 }
 
-/* Divider */
-hr { border-color: #30363D; }
+/* Selectbox and inputs dark */
+div[data-testid="stSelectbox"] > div {
+    background-color: #161B22 !important;
+    border: 0.5px solid #30363D !important;
+    color: #E6EDF3 !important;
+}
+
+/* Text input dark */
+div[data-testid="stTextInput"] > div {
+    background-color: #161B22 !important;
+    border: 0.5px solid #30363D !important;
+}
+
+input {
+    background-color: #161B22 !important;
+    color: #E6EDF3 !important;
+}
+
+/* Multiselect */
+.stMultiSelect > div > div {
+    background-color: #0D1117;
+    border: 0.5px solid #30363D;
+}
+
+/* Number input */
+.stNumberInput > div > div > input {
+    background-color: #0D1117;
+    border: 0.5px solid #30363D;
+    color: #C9D1D9;
+}
+
+/* Sidebar full dark */
+section[data-testid="stSidebar"] {
+    background-color: #161B22 !important;
+    border-right: 0.5px solid #30363D !important;
+}
+
+section[data-testid="stSidebar"] > div {
+    background-color: #161B22 !important;
+}
+
+/* All text colors */
+p, span, label, div {
+    color: #E6EDF3;
+}
+
+/* Divider color */
+hr {
+    border-color: #30363D !important;
+}
+
+/* Metric containers */
+div[data-testid="metric-container"] {
+    background-color: #161B22 !important;
+    border: 0.5px solid #30363D !important;
+    border-radius: 8px !important;
+    padding: 12px 16px;
+}
+
+/* Override any remaining white */
+* {
+    scrollbar-color: #30363D #0D1117 !important;
+}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #0D1117; }
 ::-webkit-scrollbar-thumb {
-  background: #30363D;
-  border-radius: 4px;
-}
-
-/* Text inputs */
-.stTextInput > div > div > input {
-  background-color: #0D1117;
-  border: 0.5px solid #30363D;
-  color: #C9D1D9;
-}
-
-/* Number input */
-.stNumberInput > div > div > input {
-  background-color: #0D1117;
-  border: 0.5px solid #30363D;
-  color: #C9D1D9;
-}
-
-/* Multiselect */
-.stMultiSelect > div > div {
-  background-color: #0D1117;
-  border: 0.5px solid #30363D;
+    background: #30363D;
+    border-radius: 4px;
 }
 
 /* Mobile responsive */
@@ -109,7 +172,6 @@ hr { border-color: #30363D; }
   h1 { font-size: 18px !important; }
   h2 { font-size: 16px !important; }
   .stButton > button {
-    width: 100% !important;
     padding: 10px !important;
     font-size: 14px !important;
   }
@@ -117,12 +179,6 @@ hr { border-color: #30363D; }
 
 /* Make all images responsive */
 img { max-width: 100% !important; }
-
-/* Prevent horizontal scroll */
-.main .block-container {
-  max-width: 100% !important;
-  overflow-x: hidden !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
