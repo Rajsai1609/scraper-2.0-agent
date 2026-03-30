@@ -16,8 +16,10 @@ __pycache__/
 data/scraper.db
 
 # Logs
-logs/
+logs/*.log
 *.log
+!logs/.gitkeep
+!data/.gitkeep
 
 # Test / sensitive scripts
 test_sheets.py

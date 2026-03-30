@@ -1,0 +1,53 @@
+name: Scraper 2.0 — Daily Pipeline
+
+on:
+  schedule:
+    - cron: '0 15 * * *'
+    # 15:00 UTC = 7:00 AM Seattle time (PST = UTC-8)
+    # During summer PDT = UTC-7, use '0 14 * * *'
+  workflow_dispatch:
+    # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create config directory
+        run: mkdir -p config
+
+      - name: Write Google credentials from secret
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > config/google_credentials.json
+
+      - name: Create .env file
+        run: |
+          echo "GOOGLE_CREDENTIALS_PATH=config/google_credentials.json" > .env
+          echo "SPREADSHEET_NAME=Scraper 2.0 - Job Intelligence" >> .env
+
+      - name: Create data directory
+        run: mkdir -p data logs
+
+      - name: Run full pipeline
+        run: python -m src.cli pipeline
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
