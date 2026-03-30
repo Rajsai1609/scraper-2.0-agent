@@ -183,32 +183,12 @@ def detect_usa_region(location: str, work_mode: WorkMode) -> str:
 
 
 def _is_usa_job(location: str, work_mode: WorkMode) -> bool:
-    """Return True when the job is clearly US-based."""
-    loc_lower = location.lower()
+    """Return True when the job is clearly US-based.
 
-    # 1. Canadian provinces → block immediately (before any abbreviation matching)
-    if any(prov in loc_lower for prov in _CANADIAN_PROVINCES):
-        return False
-
-    # 2. Other non-USA countries → block
-    non_us = re.search(
-        r"\b(uk|united kingdom|canada|india|germany|france|australia|brazil)\b",
-        loc_lower,
-    )
-    if non_us:
-        return False
-
-    # 3. Remote jobs with no non-US signal → treat as US
-    if work_mode is WorkMode.REMOTE:
-        return True
-
-    # 4. Explicit USA keywords
-    if any(kw in loc_lower for kw in _USA_KEYWORDS):
-        return True
-
-    # 5. US state abbreviation tokens
-    tokens = re.split(r"[\s,\-]+", location.upper())
-    return any(tok in _USA_STATES for tok in tokens)
+    Delegates to the strict geography gate in src.enrichment.geography.
+    """
+    from src.enrichment.geography import is_usa_job  # local import avoids circular dep
+    return is_usa_job(location, work_mode.value)
 
 
 # ---------------------------------------------------------------------------

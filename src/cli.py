@@ -464,6 +464,29 @@ def pipeline() -> None:
 
 
 @app.command()
+def clean(
+    dry_run: bool = typer.Option(True, "--dry-run/--no-dry-run", help="Skip Sheets writes"),
+) -> None:
+    """Remove expired jobs (older than 30 days) from Sheets."""
+    db.init_sheets()
+    from datetime import datetime, timezone
+    jobs = db.get_jobs()
+    now = datetime.now(tz=timezone.utc)
+    active = [j for j in jobs if j.expires_at is None or j.expires_at.replace(tzinfo=timezone.utc) > now]
+    removed = len(jobs) - len(active)
+    console.print(f"Total jobs: [cyan]{len(jobs)}[/cyan]  |  Expired: [yellow]{removed}[/yellow]  |  Keeping: [green]{len(active)}[/green]")
+    if removed == 0:
+        console.print("[dim]Nothing to clean.[/dim]")
+        return
+    if dry_run:
+        console.print("[dim]Dry run — nothing written to Sheets.[/dim]")
+    else:
+        db.replace_all_jobs(active)
+        db.log_run(f"clean: removed {removed} expired jobs")
+        console.print(f"[bold green]Removed {removed} expired jobs.[/bold green]")
+
+
+@app.command()
 def list_jobs(
     min_score: float = typer.Option(0.0, help="Minimum match score"),
     remote_only: bool = typer.Option(False, help="Show only remote jobs"),
