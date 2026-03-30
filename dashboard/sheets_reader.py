@@ -69,11 +69,15 @@ def load_jobs() -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].astype(str).str.upper() == "TRUE"
 
+    def _to_opt_bool(v) -> "bool | None":
+        s = str(v).strip()
+        if s in ("", "None", "none", "nan"):
+            return None
+        return s.upper() == "TRUE"
+
     for col in _OPT_BOOL_COLS:
         if col in df.columns:
-            df[col] = df[col].apply(
-                lambda v: None if str(v).strip() == "" else str(v).strip().upper() == "TRUE"
-            )
+            df[col] = df[col].apply(_to_opt_bool)
 
     for col in _INT_COLS:
         if col in df.columns:
@@ -86,6 +90,16 @@ def load_jobs() -> pd.DataFrame:
     for col in _DATE_COLS:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
+
+    # Normalise work_mode so stats_bar comparisons ("remote", "hybrid") always match
+    if "work_mode" in df.columns:
+        df["work_mode"] = df["work_mode"].str.strip().str.lower()
+
+    # Remove senior / high-experience jobs — dashboard targets 0–5 yrs entry roles
+    if "experience_level" in df.columns:
+        df = df[df["experience_level"].str.strip().str.lower() != "senior"]
+    if "years_min" in df.columns:
+        df = df[df["years_min"].isna() | (df["years_min"] <= 5)]
 
     if "skills" in df.columns:
         df["skills"] = df["skills"].apply(
