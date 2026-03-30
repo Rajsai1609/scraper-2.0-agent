@@ -26,7 +26,12 @@ def normalize_job(job: Job) -> Job:
     """
     clean_title = normalize_title(job.title)
     clean_location = normalize_location(job.location)
-    new_work_mode = detect_work_mode(clean_title, clean_location)
+    # Preserve fetcher-assigned work_mode (e.g. from Ashby workplaceType).
+    # Only fall back to text-based detection when still UNKNOWN.
+    if job.work_mode is WorkMode.UNKNOWN:
+        new_work_mode = detect_work_mode(clean_title, clean_location)
+    else:
+        new_work_mode = job.work_mode
     new_is_usa = _is_usa_job(clean_location, new_work_mode)
     new_usa_region = detect_usa_region(clean_location, new_work_mode)
     new_country = "USA" if new_is_usa else job.country

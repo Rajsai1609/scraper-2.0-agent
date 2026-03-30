@@ -94,6 +94,12 @@ def load_jobs() -> pd.DataFrame:
     # Normalise work_mode so stats_bar comparisons ("remote", "hybrid") always match
     if "work_mode" in df.columns:
         df["work_mode"] = df["work_mode"].str.strip().str.lower()
+        df["work_mode"] = df["work_mode"].replace({
+            "on-site": "onsite",
+            "on site": "onsite",
+            "": "unknown",
+            "none": "unknown",
+        })
 
     # Remove senior / high-experience jobs — dashboard targets 0–5 yrs entry roles
     if "experience_level" in df.columns:

@@ -122,10 +122,10 @@ def detect_work_mode(title: str, location: str) -> WorkMode:
     """
     combined = f"{title} {location}".lower()
 
-    if "remote" in combined:
-        return WorkMode.REMOTE
     if "hybrid" in combined:
         return WorkMode.HYBRID
+    if "remote" in combined:
+        return WorkMode.REMOTE
 
     # ONSITE: location contains a known US state abbreviation or city keyword
     loc_upper = location.upper()

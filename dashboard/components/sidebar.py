@@ -37,7 +37,9 @@ def render_sidebar(df: pd.DataFrame) -> dict:
         return sorted(str(v) for v in df[col].dropna().unique() if str(v))
 
     selected_modes = st.sidebar.multiselect(
-        "Work Mode", options=_unique_sorted("work_mode"), default=[]
+        "Work Mode",
+        options=["hybrid", "onsite", "remote", "unknown"],
+        default=[],
     )
     if selected_modes:
         filters["work_mode"] = selected_modes

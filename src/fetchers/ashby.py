@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import requests
 
-from src.core.models import Job
+from src.core.models import Job, WorkMode
 
 BASE_URL = "https://api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true"
 
@@ -29,6 +29,13 @@ def _parse_salary(compensation: Optional[dict]) -> tuple[Optional[int], Optional
     return None, None
 
 
+_WORKPLACE_TYPE_MAP: dict[str, WorkMode] = {
+    "Remote": WorkMode.REMOTE,
+    "Hybrid": WorkMode.HYBRID,
+    "OnSite": WorkMode.ONSITE,
+}
+
+
 def _parse(raw: dict[str, Any], company_name: str) -> Job:
     job_id = f"ashby-{raw['id']}"
 
@@ -43,6 +50,9 @@ def _parse(raw: dict[str, Any], company_name: str) -> Job:
 
     salary_min, salary_max = _parse_salary(raw.get("compensation"))
 
+    workplace_type = raw.get("workplaceType") or ""
+    work_mode = _WORKPLACE_TYPE_MAP.get(workplace_type, WorkMode.UNKNOWN)
+
     return Job(
         id=job_id,
         company=company_name,
@@ -52,4 +62,5 @@ def _parse(raw: dict[str, Any], company_name: str) -> Job:
         url=raw.get("jobUrl") or f"https://jobs.ashbyhq.com/{company_name.lower()}/{raw['id']}",
         description=raw.get("descriptionPlain") or "",
         date_posted=date_posted,
+        work_mode=work_mode,
     )
