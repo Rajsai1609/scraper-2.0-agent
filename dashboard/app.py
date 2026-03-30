@@ -17,10 +17,19 @@ from components.stats_bar import render_stats
 from sheets_reader import load_jobs
 
 st.set_page_config(
-    page_title="Scraper 2.0 — Job Intelligence",
-    page_icon="🔍",
+    page_title="MCT PathAI",
+    page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
+    menu_items={
+        "Get Help": None,
+        "Report a bug": None,
+        "About": (
+            "MCT PathAI — Job Intelligence for "
+            "F1/OPT students. Built by Rajsai Naredla "
+            "· MCTechnology LLC · Seattle, WA"
+        ),
+    },
 )
 
 st.markdown("""
@@ -91,11 +100,34 @@ hr { border-color: #30363D; }
   background-color: #0D1117;
   border: 0.5px solid #30363D;
 }
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .block-container {
+    padding: 0.5rem 0.5rem !important;
+  }
+  h1 { font-size: 18px !important; }
+  h2 { font-size: 16px !important; }
+  .stButton > button {
+    width: 100% !important;
+    padding: 10px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* Make all images responsive */
+img { max-width: 100% !important; }
+
+/* Prevent horizontal scroll */
+.main .block-container {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown(
-    '<h1 style="color:#E6EDF3;margin-bottom:2px;">🔍 Scraper <span style="color:#58A6FF;">2.0</span> — Job Intelligence</h1>',
+    '<h1 style="color:#E6EDF3;margin-bottom:2px;">🎯 MCT <span style="color:#58A6FF;">PathAI</span> — Job Intelligence</h1>',
     unsafe_allow_html=True,
 )
 st.markdown(

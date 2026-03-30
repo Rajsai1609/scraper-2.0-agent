@@ -1,4 +1,4 @@
-"""Individual job card — renders one DataFrame row as a GitHub-dark styled HTML card."""
+"""Individual job card — mobile-responsive GitHub-dark styled HTML card."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -13,6 +13,113 @@ _EXP_LABEL = {
     "senior":   "Senior",
     "unknown":  "",
 }
+
+_CARD_CSS = """
+<style>
+.job-card {
+    background: #161B22;
+    border: 0.5px solid #30363D;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+.job-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #58A6FF;
+    word-break: break-word;
+    flex: 1;
+    text-decoration: none;
+    line-height: 1.4;
+}
+.job-title:hover { text-decoration: underline; }
+.job-meta {
+    font-size: 12px;
+    color: #8B949E;
+    margin-bottom: 10px;
+    word-break: break-word;
+}
+.score-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 6px;
+}
+.badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.skills-row {
+    font-size: 10px;
+    color: #484F58;
+    margin-bottom: 8px;
+    word-break: break-word;
+}
+.card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.posted-time {
+    font-size: 10px;
+    color: #484F58;
+}
+.apply-btn {
+    font-size: 13px;
+    padding: 8px 18px;
+    background: #238636;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    min-width: 90px;
+    text-align: center;
+    text-decoration: none !important;
+    display: inline-block;
+    white-space: nowrap;
+}
+@media (max-width: 600px) {
+    .job-title  { font-size: 14px; }
+    .badge      { font-size: 9px; padding: 2px 6px; }
+    .apply-btn  {
+        display: block;
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+        box-sizing: border-box;
+    }
+    .card-footer { flex-direction: column; align-items: stretch; }
+}
+</style>
+"""
+_CSS_INJECTED = False
 
 
 def _days_ago(dt) -> str:
@@ -36,14 +143,18 @@ def _days_ago(dt) -> str:
 
 def _badge(text: str, bg: str, fg: str) -> str:
     return (
-        f'<span style="background:{bg};color:{fg};padding:3px 9px;'
-        f'border-radius:4px;font-size:11px;font-weight:500;white-space:nowrap;">'
+        f'<span class="badge" style="background:{bg};color:{fg};">'
         f'{text}</span>'
     )
 
 
 def render_job_card(row: pd.Series) -> None:
-    """Render one job as a GitHub-dark HTML card."""
+    """Render one job as a mobile-responsive GitHub-dark HTML card."""
+    global _CSS_INJECTED
+    if not _CSS_INJECTED:
+        st.markdown(_CARD_CSS, unsafe_allow_html=True)
+        _CSS_INJECTED = True
+
     url   = row.get("url", "#") or "#"
     title = row.get("title", "Untitled") or "Untitled"
 
@@ -56,7 +167,7 @@ def render_job_card(row: pd.Series) -> None:
     loc_meta     = ", ".join(p for p in [location, region] if p)
     meta_display = " · ".join(p for p in [company_meta, loc_meta] if p)
 
-    # ── Score circle ─────────────────────────────────────────────────────────
+    # ── Score circle ──────────────────────────────────────────────────────────
     score = row.get("fit_score")
     has_score = score is not None and not (isinstance(score, float) and pd.isna(score))
     if has_score:
@@ -105,42 +216,35 @@ def render_job_card(row: pd.Series) -> None:
     if exp_label:
         badges.append(_badge(exp_label, "#1C2128", "#484F58"))
 
-    badges_html = " ".join(badges)
+    badges_html = "".join(badges)
 
     # ── Skills ────────────────────────────────────────────────────────────────
     skills = row.get("skills", [])
     if isinstance(skills, list) and skills:
         skills_str  = " · ".join(skills[:12])
-        skills_html = f'<div style="color:#484F58;font-size:10px;margin-top:8px;">{skills_str}</div>'
+        skills_html = f'<div class="skills-row">{skills_str}</div>'
     else:
         skills_html = ""
 
     # ── Posted ────────────────────────────────────────────────────────────────
     posted = _days_ago(row.get("date_posted"))
-    posted_html = (
-        f'<span style="color:#484F58;font-size:10px;">{posted}</span>'
-        if posted else '<span></span>'
-    )
+    posted_html = f'<span class="posted-time">{posted}</span>' if posted else '<span></span>'
 
     html = f"""
-<div style="background:#161B22;border:0.5px solid #30363D;border-radius:8px;padding:16px 20px;margin-bottom:12px;">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+<div class="job-card">
+  <div class="card-top">
     <div style="flex:1;min-width:0;">
-      <a href="{url}" target="_blank"
-         style="color:#58A6FF;font-size:18px;font-weight:600;text-decoration:none;word-break:break-word;">{title}</a>
+      <a href="{url}" target="_blank" class="job-title">{title}</a>
+      <div class="job-meta">{meta_display}</div>
     </div>
-    <div style="background:{score_bg};color:{score_fg};width:44px;height:44px;border-radius:50%;
-                display:flex;align-items:center;justify-content:center;
-                font-weight:700;font-size:15px;flex-shrink:0;margin-left:16px;">{score_text}</div>
+    <div class="score-circle"
+         style="background:{score_bg};color:{score_fg};">{score_text}</div>
   </div>
-  <div style="color:#8B949E;font-size:13px;margin-bottom:10px;">{meta_display}</div>
-  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;">{badges_html}</div>
+  <div class="badges">{badges_html}</div>
   {skills_html}
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+  <div class="card-footer">
     {posted_html}
-    <a href="{url}" target="_blank"
-       style="background:#238636;color:#ffffff;padding:6px 14px;border-radius:6px;
-              text-decoration:none;font-size:13px;font-weight:500;">Apply</a>
+    <a href="{url}" target="_blank" class="apply-btn">Apply</a>
   </div>
 </div>
 """

@@ -11,6 +11,12 @@ def render_sidebar(df: pd.DataFrame) -> dict:
     Returns only filters that deviate from their default so the caller can
     apply them without extra logic.
     """
+    st.sidebar.markdown("""
+<div style="padding:8px 0 12px;border-bottom:0.5px solid #30363D;margin-bottom:12px;">
+  <div style="font-size:15px;font-weight:500;color:#E6EDF3;">MCT PathAI</div>
+  <div style="font-size:11px;color:#484F58;margin-top:2px;">F1 · OPT · STEM OPT jobs</div>
+</div>
+""", unsafe_allow_html=True)
     st.sidebar.title("Filters")
     filters: dict = {}
 
