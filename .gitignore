@@ -5,7 +5,6 @@
 
 # Google credentials
 config/google_credentials.json
-config/
 
 # Python
 __pycache__/

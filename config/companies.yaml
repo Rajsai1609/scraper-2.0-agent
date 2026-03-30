@@ -1,0 +1,66 @@
+companies:
+  greenhouse:
+    - name: Stripe
+      slug: stripe
+      url: https://boards.greenhouse.io/stripe
+    - name: Airbnb
+      slug: airbnb
+      url: https://boards.greenhouse.io/airbnb
+    - name: Figma
+      slug: figma
+      url: https://boards.greenhouse.io/figma
+    - name: Dropbox
+      slug: dropbox
+      url: https://boards.greenhouse.io/dropbox
+    - name: Reddit
+      slug: reddit
+      url: https://boards.greenhouse.io/reddit
+    - name: Datadog
+      slug: datadog
+      url: https://boards.greenhouse.io/datadog
+    - name: MongoDB
+      slug: mongodb
+      url: https://boards.greenhouse.io/mongodb
+    - name: Databricks
+      slug: databricks
+      url: https://boards.greenhouse.io/databricks
+    - name: Elastic
+      slug: elastic
+      url: https://boards.greenhouse.io/elastic
+    - name: GitLab
+      slug: gitlab
+      url: https://boards.greenhouse.io/gitlab
+
+  lever:
+    - name: Plaid
+      slug: plaid
+      url: https://jobs.lever.co/plaid
+    - name: ContentSquare
+      slug: contentsquare
+      url: https://jobs.lever.co/contentsquare
+    - name: JumpCloud
+      slug: jumpcloud
+      url: https://jobs.lever.co/jumpcloud
+    - name: Neon
+      slug: neon
+      url: https://jobs.lever.co/neon
+    - name: Wealthfront
+      slug: wealthfront
+      url: https://jobs.lever.co/wealthfront
+
+  ashby:
+    - name: OpenAI
+      slug: openai
+      url: https://jobs.ashbyhq.com/openai
+    - name: Notion
+      slug: notion
+      url: https://jobs.ashbyhq.com/notion
+    - name: Ramp
+      slug: ramp
+      url: https://jobs.ashbyhq.com/ramp
+    - name: Cohere
+      slug: cohere
+      url: https://jobs.ashbyhq.com/cohere
+    - name: Perplexity
+      slug: perplexity
+      url: https://jobs.ashbyhq.com/perplexity
