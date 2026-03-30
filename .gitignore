@@ -1,0 +1,26 @@
+# Environment
+.env
+.env.local
+.env.production
+
+# Google credentials
+config/google_credentials.json
+config/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Database
+data/scraper.db
+
+# Logs
+logs/
+*.log
+
+# Test / sensitive scripts
+test_sheets.py
+
+# Resume (personal data)
+data/resume.txt
