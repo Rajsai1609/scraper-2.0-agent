@@ -4,6 +4,25 @@ import re
 
 from src.core.models import Job
 
+KNOWN_H1B_SPONSORS: frozenset[str] = frozenset([
+    # Big Tech
+    "google", "microsoft", "amazon", "apple", "meta", "netflix",
+    "ibm", "oracle", "salesforce", "adobe", "intel", "qualcomm",
+    "nvidia", "amd", "broadcom", "cisco",
+    # Mid-size / well-known sponsors
+    "stripe", "dropbox", "figma", "notion", "canva", "asana",
+    "zendesk", "hubspot", "intercom", "amplitude", "gitlab",
+    "datadog", "mongodb", "elastic", "confluent", "hashicorp", "okta",
+    "twilio", "sendgrid", "cloudflare", "fastly", "snowflake",
+    "databricks", "palantir", "splunk", "new relic", "pagerduty",
+    "atlassian", "zenefits", "workday", "servicenow", "veeva",
+    "zoom", "slack", "box", "docusign", "ringcentral",
+    "linkedin", "twitter", "pinterest", "lyft", "uber", "airbnb",
+    "doordash", "instacart", "robinhood", "coinbase", "plaid",
+    "brex", "rippling", "gusto", "chime", "affirm", "klarna",
+    "square", "block", "paypal", "intuit",
+])
+
 _H1B_YES: list[str] = [
     r"\bwill\s+(?:provide\s+)?(?:visa\s+)?sponsorship\b",
     r"\bvisa\s+sponsorship\s+(?:is\s+)?(?:provided|available|offered)\b",
@@ -36,17 +55,22 @@ _STEM_OPT: list[str] = [
 def enrich_job(job: Job) -> Job:
     """Return a new Job with visa fields populated from description."""
     desc = job.description.lower() if job.description else ""
+    company_lower = job.company.lower() if job.company else ""
 
+    # Company name lookup takes priority over description parsing
     h1b_sponsor: bool | None = None
-    for p in _H1B_YES:
-        if re.search(p, desc):
-            h1b_sponsor = True
-            break
-    if h1b_sponsor is None:
-        for p in _H1B_NO:
+    if any(sponsor in company_lower for sponsor in KNOWN_H1B_SPONSORS):
+        h1b_sponsor = True
+    else:
+        for p in _H1B_YES:
             if re.search(p, desc):
-                h1b_sponsor = False
+                h1b_sponsor = True
                 break
+        if h1b_sponsor is None:
+            for p in _H1B_NO:
+                if re.search(p, desc):
+                    h1b_sponsor = False
+                    break
 
     opt_friendly: bool | None = None
     if any(re.search(p, desc) for p in _OPT):

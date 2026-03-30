@@ -95,6 +95,12 @@ _USA_KEYWORDS: frozenset[str] = frozenset([
     "boston", "austin", "denver", "atlanta", "miami",
 ])
 
+_CANADIAN_PROVINCES: frozenset[str] = frozenset([
+    "british columbia", "ontario", "alberta", "quebec", "manitoba",
+    "saskatchewan", "nova scotia", "new brunswick", "newfoundland",
+    "prince edward island", "yukon", "nunavut", "northwest territories",
+])
+
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -178,19 +184,30 @@ def detect_usa_region(location: str, work_mode: WorkMode) -> str:
 
 def _is_usa_job(location: str, work_mode: WorkMode) -> bool:
     """Return True when the job is clearly US-based."""
-    if work_mode is WorkMode.REMOTE:
-        # Remote jobs without an explicit non-US country default to US
-        non_us = re.search(
-            r"\b(uk|united kingdom|canada|india|germany|france|australia|brazil)\b",
-            location.lower(),
-        )
-        return non_us is None
-
     loc_lower = location.lower()
+
+    # 1. Canadian provinces → block immediately (before any abbreviation matching)
+    if any(prov in loc_lower for prov in _CANADIAN_PROVINCES):
+        return False
+
+    # 2. Other non-USA countries → block
+    non_us = re.search(
+        r"\b(uk|united kingdom|canada|india|germany|france|australia|brazil)\b",
+        loc_lower,
+    )
+    if non_us:
+        return False
+
+    # 3. Remote jobs with no non-US signal → treat as US
+    if work_mode is WorkMode.REMOTE:
+        return True
+
+    # 4. Explicit USA keywords
     if any(kw in loc_lower for kw in _USA_KEYWORDS):
         return True
 
-    tokens = re.split(r"[\s,]+", location.upper())
+    # 5. US state abbreviation tokens
+    tokens = re.split(r"[\s,\-]+", location.upper())
     return any(tok in _USA_STATES for tok in tokens)
 
 
