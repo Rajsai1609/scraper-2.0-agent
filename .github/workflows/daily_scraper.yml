@@ -2,9 +2,8 @@ name: Scraper 2.0 — Daily Pipeline
 
 on:
   schedule:
-    - cron: '0 15 * * *'
-    # 15:00 UTC = 7:00 AM Seattle time (PST = UTC-8)
-    # During summer PDT = UTC-7, use '0 14 * * *'
+    - cron: '0 14 * * *'
+    # 14:00 UTC = 7:00 AM PDT Seattle time (PDT = UTC-7)
   workflow_dispatch:
     # Allows manual trigger from GitHub Actions tab
 
