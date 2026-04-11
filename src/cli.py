@@ -49,10 +49,18 @@ def scrape(
     ats: Optional[str] = typer.Option(None, help="Limit to a specific ATS (e.g. greenhouse)"),
     company: Optional[str] = typer.Option(None, help="Limit to a specific company slug"),
     score: bool = typer.Option(True, help="Score jobs against resume"),
-    save: bool = typer.Option(True, help="Save results to Google Sheets"),
+    save: bool = typer.Option(False, help="Also save results to Google Sheets (requires credentials)"),
+    no_sheets: bool = typer.Option(False, "--no-sheets", help="Skip Google Sheets entirely"),
 ) -> None:
-    """Scrape jobs from configured companies."""
-    db.init_sheets()
+    """Scrape jobs from configured companies and save to SQLite."""
+    db.init_db()
+
+    use_sheets = save and not no_sheets and db.CREDS_PATH.exists()
+    if use_sheets:
+        db.init_sheets()
+    elif save and not no_sheets and not db.CREDS_PATH.exists():
+        console.print("[yellow]--save requested but Google Sheets credentials not found; saving to SQLite only.[/yellow]")
+
     config = _load_config()
     resume = _load_resume() if score else Resume(raw_text="")
 
@@ -86,15 +94,19 @@ def scrape(
     if score and resume.raw_text:
         all_jobs = score_all(all_jobs, resume)
 
-    if save:
-        inserted = 0
+    # Always save to SQLite
+    sqlite_inserted, sqlite_skipped = db.save_jobs_batch(all_jobs)
+    console.print(f"\n[bold]{sqlite_inserted} new jobs saved to SQLite[/bold] ({sqlite_skipped} duplicates skipped).")
+
+    if use_sheets:
+        sheets_inserted = 0
         for job in all_jobs:
             before = db.job_exists(job.id)
             db.insert_job(job)
             if not before:
-                inserted += 1
-        db.log_run(f"scrape: {inserted} new jobs inserted ({len(all_jobs)} fetched)")
-        console.print(f"\n[bold]{inserted} new jobs saved to Google Sheets.[/bold]")
+                sheets_inserted += 1
+        db.log_run(f"scrape: {sheets_inserted} new jobs inserted ({len(all_jobs)} fetched)")
+        console.print(f"[bold]{sheets_inserted} new jobs saved to Google Sheets.[/bold]")
 
     _print_table(all_jobs[:25])
 
@@ -105,6 +117,7 @@ def run(
     debug: bool = typer.Option(False, "--debug/--no-debug", help="Print per-job detail and errors"),
 ) -> None:
     """Fetch → normalize → geo gate → exp filter. Live mode writes to Sheets."""
+    db.init_db()
     if not dry_run:
         db.init_sheets()
 
@@ -217,9 +230,10 @@ def run(
 
 @app.command()
 def enrich() -> None:
-    """Enrich all jobs in Sheets with experience, visa, and category data."""
+    """Enrich all jobs in SQLite with experience, visa, and category data."""
+    db.init_db()
     db.init_sheets()
-    console.print("Loading jobs from Sheets...")
+    console.print("Loading jobs...")
     jobs = db.get_jobs()
     console.print(f"  Loaded [cyan]{len(jobs)}[/cyan] jobs")
 
@@ -271,8 +285,8 @@ def enrich() -> None:
 def score(
     resume_path: Path = typer.Option(Path("data/resume.txt"), help="Path to resume file"),
 ) -> None:
-    """Score all jobs in Sheets against the resume, update fit_score."""
-    db.init_sheets()
+    """Score all jobs against the resume, update fit_score."""
+    db.init_db()
     resume = _load_resume()
     if not resume.raw_text:
         console.print(f"[red]Resume not found at {RESUME_PATH}[/red]")
@@ -282,14 +296,15 @@ def score(
         f"Resume skills detected: [cyan]{', '.join(resume.skills) or 'none'}[/cyan]"
     )
 
-    console.print("\nLoading jobs from Sheets...")
+    console.print("\nLoading jobs from SQLite...")
     jobs = db.get_jobs()
     console.print(f"  Scoring [cyan]{len(jobs)}[/cyan] jobs...")
 
     scored = score_all(jobs, resume)
 
-    console.print("Saving scored jobs back to Sheets...")
-    db.replace_all_jobs(scored)
+    console.print("Saving fit_score values to SQLite...")
+    updated = db.update_fit_scores(scored)
+    console.print(f"  [green]{updated}[/green] rows updated")
     db.log_run(f"score: {len(scored)} jobs scored")
 
     # Score distribution bands
@@ -334,8 +349,8 @@ def show(
     category: Optional[str] = typer.Option(None, help="Filter by job category"),
     limit: int = typer.Option(25, help="Max rows to display"),
 ) -> None:
-    """Show filtered jobs from Sheets."""
-    db.init_sheets()
+    """Show filtered jobs from SQLite."""
+    db.init_db()
     filters: dict = {}
     if min_score > 0.0:
         filters["min_score"] = min_score
@@ -364,8 +379,9 @@ def show(
 @app.command()
 def stats() -> None:
     """Show a 4-panel aggregate statistics dashboard."""
+    db.init_db()
     db.init_sheets()
-    console.print("Computing statistics from Sheets (this may take a moment)...")
+    console.print("Computing statistics...")
     s = db.get_stats()
 
     overview = Table(title="Overview", show_header=False, box=None)
@@ -412,6 +428,7 @@ def stats() -> None:
 def pipeline() -> None:
     """Full pipeline: fetch → insert → enrich → score. Used by Task Scheduler."""
     console.print("[bold cyan]--- STEP 1: Fetch and insert ---[/bold cyan]")
+    db.init_db()
     db.init_sheets()
     config = _load_config()
     companies = config.get("companies", {})
@@ -467,7 +484,8 @@ def pipeline() -> None:
 def clean(
     dry_run: bool = typer.Option(True, "--dry-run/--no-dry-run", help="Skip Sheets writes"),
 ) -> None:
-    """Remove expired jobs (older than 30 days) from Sheets."""
+    """Remove expired jobs (older than 30 days)."""
+    db.init_db()
     db.init_sheets()
     from datetime import datetime, timezone
     jobs = db.get_jobs()
@@ -492,8 +510,8 @@ def list_jobs(
     remote_only: bool = typer.Option(False, help="Show only remote jobs"),
     limit: int = typer.Option(25, help="Max rows to display"),
 ) -> None:
-    """List jobs from Google Sheets."""
-    db.init_sheets()
+    """List jobs from SQLite."""
+    db.init_db()
     filters: dict = {}
     if min_score:
         filters["min_score"] = min_score
