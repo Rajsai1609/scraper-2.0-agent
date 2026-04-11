@@ -13,6 +13,7 @@ __pycache__/
 
 # Database
 data/scraper.db
+data/jobs.db
 
 # Logs
 logs/*.log
@@ -22,6 +23,3 @@ logs/*.log
 
 # Test / sensitive scripts
 test_sheets.py
-
-# Resume (personal data)
-data/resume.txt

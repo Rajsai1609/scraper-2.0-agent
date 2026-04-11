@@ -32,7 +32,19 @@ jobs:
         env:
           PYTHONPATH: .
 
+      - name: Check resume exists
+        id: check_resume
+        run: |
+          if [ -f "data/resume.txt" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  WARNING: data/resume.txt not found — skipping scorer step"
+          fi
+
       - name: Run scorer
+        if: steps.check_resume.outputs.exists == 'true'
+        continue-on-error: true
         run: python -m src.cli score
         env:
           PYTHONPATH: .
@@ -42,11 +54,11 @@ jobs:
         env:
           PYTHONPATH: .
 
-      - name: Commit updated jobs.db and pipeline.md
+      - name: Commit bridge last_run.json
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
-          git add data/jobs.db bridge/last_run.json
+          git add bridge/last_run.json
           git diff --staged --quiet || git commit -m "chore: daily scrape $(date -u +%Y-%m-%d)"
           git push
         env:
