@@ -68,7 +68,7 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/Rajsai1609/ai-carrer-ops.git
-          git add data/pipeline.md
+          git add -f data/pipeline.md
           git diff --staged --quiet || git commit -m "chore: daily scrape $(date -u +%Y-%m-%d)"
           git push
         env:
