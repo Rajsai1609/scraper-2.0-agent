@@ -64,10 +64,11 @@ jobs:
 
       - name: Commit bridge last_run.json
         run: |
+          cd ai-carrer-ops
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
-          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
-          git add bridge/last_run.json
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/Rajsai1609/ai-carrer-ops.git
+          git add data/pipeline.md
           git diff --staged --quiet || git commit -m "chore: daily scrape $(date -u +%Y-%m-%d)"
           git push
         env:
