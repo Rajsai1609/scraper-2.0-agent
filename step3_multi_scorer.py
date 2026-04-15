@@ -98,7 +98,18 @@ def load_jobs_from_sqlite() -> list[dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT id, description, skills FROM jobs"
+            """
+            SELECT id, description, skills FROM jobs
+            WHERE is_usa_job = 1
+               OR usa_region != ''
+               OR location LIKE '%USA%'
+               OR location LIKE '%United States%'
+               OR location LIKE '%, CA%'
+               OR location LIKE '%, NY%'
+               OR location LIKE '%, WA%'
+               OR location LIKE '%, TX%'
+               OR location LIKE '%, MA%'
+            """
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
