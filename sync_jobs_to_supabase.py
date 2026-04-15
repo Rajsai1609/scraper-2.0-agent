@@ -70,7 +70,6 @@ def _coerce_row(row: dict[str, Any]) -> dict[str, Any]:
     - INTEGER booleans -> Python bool (Supabase BOOLEAN)
     - skills JSON string -> parsed list (Supabase JSONB)
     - ISO datetime strings kept as-is (Postgres accepts them)
-    - Limit description to 10 000 chars to stay under request limits
     """
     def _opt_bool(v: Any) -> bool | None:
         return None if v is None else bool(v)
@@ -89,7 +88,6 @@ def _coerce_row(row: dict[str, Any]) -> dict[str, Any]:
         "company":           row["company"] or "",
         "location":          row.get("location") or "",
         "url":               row["url"] or "",
-        "description":       (row.get("description") or "")[:10_000],
         "work_mode":         row.get("work_mode") or "unknown",
         "usa_region":        row.get("usa_region") or "",
         "is_usa_job":        bool(row.get("is_usa_job") or 0),
