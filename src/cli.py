@@ -91,6 +91,27 @@ def scrape(
             except Exception as exc:
                 console.print(f"  [red]Error: {exc}[/red]")
 
+    # ── JobSpy sources ────────────────────────────────────────────────────────
+    from src.fetchers import jobspy_fetcher
+    console.print("\n[bold cyan]Fetching via JobSpy (LinkedIn, Indeed, Glassdoor, ZipRecruiter)...[/bold cyan]")
+    try:
+        jobspy_jobs, jobspy_source_counts = jobspy_fetcher.fetch_all_jobs()
+        for job in jobspy_jobs:
+            enriched_j = skills_enricher.enrich_job(normalize_job(job))
+            all_jobs.append(enriched_j)
+        for site, count in sorted(jobspy_source_counts.items()):
+            console.print(f"  [green]{count} jobs[/green] from {site}")
+        console.print(f"  [bold]{sum(jobspy_source_counts.values())} total JobSpy jobs[/bold]")
+    except Exception as exc:
+        console.print(f"  [red]JobSpy error: {exc}[/red]")
+
+    # ── Deduplicate by URL across all sources ─────────────────────────────────
+    seen: dict[str, object] = {}
+    for job in all_jobs:
+        if job.url not in seen:
+            seen[job.url] = job
+    all_jobs = list(seen.values())  # type: ignore[assignment]
+
     if score and resume.raw_text:
         all_jobs = score_all(all_jobs, resume)
 
@@ -452,6 +473,35 @@ def pipeline() -> None:
                     continue
                 if job.is_usa_job and (job.years_min is None or job.years_min <= 5):
                     qualifying_jobs.append(job)
+
+    ats_qualifying_count = len(qualifying_jobs)
+
+    # ── JobSpy sources ────────────────────────────────────────────────────────
+    from src.fetchers import jobspy_fetcher
+    console.print("  Fetching via JobSpy (LinkedIn, Indeed, Glassdoor, ZipRecruiter)...")
+    jobspy_source_counts: dict[str, int] = {}
+    try:
+        jobspy_jobs, jobspy_source_counts = jobspy_fetcher.fetch_all_jobs()
+        for job in jobspy_jobs:
+            try:
+                normalized = normalize_job(job)
+            except Exception:
+                continue
+            if normalized.is_usa_job and (normalized.years_min is None or normalized.years_min <= 5):
+                qualifying_jobs.append(normalized)
+        for site, count in sorted(jobspy_source_counts.items()):
+            console.print(f"    [green]{count} jobs[/green] from {site}")
+    except Exception as exc:
+        console.print(f"  [red]JobSpy error: {exc}[/red]")
+
+    # Deduplicate qualifying jobs by URL
+    seen_urls: dict[str, object] = {}
+    for job in qualifying_jobs:
+        if job.url not in seen_urls:
+            seen_urls[job.url] = job
+    qualifying_jobs = list(seen_urls.values())  # type: ignore[assignment]
+
+    console.print(f"  ATS jobs: [cyan]{ats_qualifying_count}[/cyan]  |  JobSpy jobs: [cyan]{sum(jobspy_source_counts.values())}[/cyan]  |  Total (deduped): [cyan]{len(qualifying_jobs)}[/cyan]")
 
     total_inserted = db.insert_jobs_batch(qualifying_jobs)
     console.print(f"  [green]{total_inserted}[/green] new jobs inserted")
