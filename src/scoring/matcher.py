@@ -1,8 +1,23 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from src.core.models import Job, Resume
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+
+_model: Optional["SentenceTransformer"] = None
+
+
+def _get_model() -> "SentenceTransformer":
+    """Return the shared SentenceTransformer instance, loading it once."""
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer  # type: ignore
+
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 
 def _jaccard(a: list[str], b: list[str]) -> float:
@@ -26,9 +41,9 @@ def score_job(job: Job, resume: Resume) -> float:
     semantic_score: Optional[float] = None
     if job.description and resume.raw_text:
         try:
-            from sentence_transformers import SentenceTransformer, util  # type: ignore
+            from sentence_transformers import util  # type: ignore
 
-            model = SentenceTransformer("all-MiniLM-L6-v2")
+            model = _get_model()
             embeddings = model.encode(
                 [job.description[:2000], resume.raw_text[:2000]],
                 convert_to_tensor=True,
