@@ -14,7 +14,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import gspread
 from dotenv import load_dotenv
@@ -71,6 +71,15 @@ LOGS_HEADERS: list[str] = ["timestamp", "level", "message"]
 
 # column A holds job ids (1-based in gspread)
 _ID_COL: int = 1
+
+# ---------------------------------------------------------------------------
+# Rate-limit / quota constants
+# ---------------------------------------------------------------------------
+
+_BATCH_SIZE: int = 50          # rows per append_rows call
+_BATCH_DELAY_S: float = 1.0    # seconds between consecutive batch writes
+_MAX_RETRIES: int = 5
+_BACKOFF_BASE_S: float = 2.0   # exponential-backoff base (seconds)
 
 # ---------------------------------------------------------------------------
 # Module-level connection state
@@ -138,6 +147,27 @@ def _get_worksheet(name: str) -> gspread.Worksheet:
         raise
 
 
+def _sheets_write(fn: Callable[[], Any]) -> Any:
+    """
+    Execute a Sheets write callable with exponential backoff on quota errors.
+
+    Retries up to _MAX_RETRIES times when a 429 / Quota-Exceeded / RESOURCE_EXHAUSTED
+    error is returned by the API.  Delays double on each attempt, starting at
+    _BACKOFF_BASE_S seconds.  All other errors are re-raised immediately.
+    """
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return fn()
+        except Exception as exc:
+            err = str(exc)
+            is_quota = "429" in err or "Quota" in err or "RESOURCE_EXHAUSTED" in err
+            if is_quota and attempt < _MAX_RETRIES - 1:
+                delay = _BACKOFF_BASE_S ** (attempt + 1)
+                time.sleep(delay)
+            else:
+                raise
+
+
 def _ensure_worksheet(name: str, headers: list[str]) -> None:
     """Create the worksheet if absent; write headers only when row 1 is empty."""
     sheet = _get_spreadsheet()
@@ -147,7 +177,7 @@ def _ensure_worksheet(name: str, headers: list[str]) -> None:
         ws = sheet.add_worksheet(title=name, rows=1000, cols=max(len(headers), 3))
 
     if not ws.row_values(1):
-        ws.append_row(headers, value_input_option="RAW")
+        _sheets_write(lambda: ws.append_row(headers, value_input_option="RAW"))
 
 
 def _load_existing_ids() -> set[str]:
@@ -294,48 +324,51 @@ def job_exists(job_id: str) -> bool:
 def insert_job(job: Job) -> bool:
     """
     Append job as a new row.  Returns True if inserted, False if skipped
-    because the id was already present.  Retries once after 60 s on 429.
+    because the id was already present.  Uses exponential backoff on 429.
     """
     if job_exists(job.id):
         return False
     ws = _get_worksheet("Jobs")
-    try:
-        ws.append_row(_job_to_row(job), value_input_option="RAW")
-        _existing_ids.add(job.id)
-        return True
-    except Exception as e:
-        if "429" in str(e) or "Quota" in str(e):
-            time.sleep(60)
-            ws.append_row(_job_to_row(job), value_input_option="RAW")
-            _existing_ids.add(job.id)
-            return True
-        raise
+    row = _job_to_row(job)
+    _sheets_write(lambda: ws.append_row(row, value_input_option="RAW"))
+    _existing_ids.add(job.id)
+    return True
 
 
 def batch_insert_jobs(jobs: list[Job]) -> tuple[int, int]:
     """
     Insert all jobs that are not already in the sheet.
     Uses the in-memory ID cache — no extra col_values() call.
+    Writes in batches of _BATCH_SIZE with _BATCH_DELAY_S between batches.
     Returns (inserted_count, skipped_count).
     """
     existing = _load_existing_ids()
     new_jobs = [j for j in jobs if j.id not in existing]
     skipped = len(jobs) - len(new_jobs)
 
-    if new_jobs:
-        ws = _get_worksheet("Jobs")
-        ws.append_rows([_job_to_row(j) for j in new_jobs], value_input_option="RAW")
-        for j in new_jobs:
+    if not new_jobs:
+        return 0, skipped
+
+    ws = _get_worksheet("Jobs")
+    rows = [_job_to_row(j) for j in new_jobs]
+
+    for i in range(0, len(rows), _BATCH_SIZE):
+        batch = rows[i:i + _BATCH_SIZE]
+        _sheets_write(lambda b=batch: ws.append_rows(b, value_input_option="RAW"))
+        for j in new_jobs[i:i + _BATCH_SIZE]:
             _existing_ids.add(j.id)
+        if i + _BATCH_SIZE < len(rows):
+            time.sleep(_BATCH_DELAY_S)
 
     return len(new_jobs), skipped
 
 
 def insert_jobs_batch(jobs: list[Job]) -> int:
     """
-    Insert new jobs in batches of 50 rows with a 2 s pause between batches
-    to stay under the Sheets write-quota.  Uses the in-memory ID cache so
-    no col_values() call is made.  Returns the number of rows inserted.
+    Insert new jobs in batches of _BATCH_SIZE rows with _BATCH_DELAY_S pause
+    between batches to stay under the Sheets write-quota.  Uses exponential
+    backoff on 429 errors.  Uses the in-memory ID cache — no col_values()
+    call is made.  Returns the number of rows inserted.
     """
     existing = _load_existing_ids()
     new_jobs = [j for j in jobs if j.id not in existing]
@@ -345,23 +378,15 @@ def insert_jobs_batch(jobs: list[Job]) -> int:
     ws = _get_worksheet("Jobs")
     rows = [_job_to_row(j) for j in new_jobs]
 
-    batch_size = 50
     inserted = 0
-    for i in range(0, len(rows), batch_size):
-        batch = rows[i:i + batch_size]
-        try:
-            ws.append_rows(batch, value_input_option="RAW")
-        except Exception as e:
-            if "429" in str(e) or "Quota" in str(e):
-                time.sleep(60)
-                ws.append_rows(batch, value_input_option="RAW")
-            else:
-                raise
-        for j in new_jobs[i:i + batch_size]:
+    for i in range(0, len(rows), _BATCH_SIZE):
+        batch = rows[i:i + _BATCH_SIZE]
+        _sheets_write(lambda b=batch: ws.append_rows(b, value_input_option="RAW"))
+        for j in new_jobs[i:i + _BATCH_SIZE]:
             _existing_ids.add(j.id)
         inserted += len(batch)
-        if i + batch_size < len(rows):
-            time.sleep(2)
+        if i + _BATCH_SIZE < len(rows):
+            time.sleep(_BATCH_DELAY_S)
 
     return inserted
 
@@ -389,16 +414,21 @@ def update_job(job_id: str, updates: dict[str, Any]) -> bool:
         cells.append(gspread.Cell(row_idx, col_idx, value))
 
     if cells:
-        ws.update_cells(cells, value_input_option="RAW")
+        _sheets_write(lambda: ws.update_cells(cells, value_input_option="RAW"))
     return True
 
 
 def replace_all_jobs(jobs: list[Job]) -> None:
     """Overwrite every data row in the Jobs sheet with the supplied jobs list."""
     ws = _get_worksheet("Jobs")
-    ws.clear()
-    rows: list[list[Any]] = [JOBS_HEADERS] + [_job_to_row(j) for j in jobs]
-    ws.append_rows(rows, value_input_option="RAW")
+    _sheets_write(lambda: ws.clear())
+    time.sleep(_BATCH_DELAY_S)
+    all_rows: list[list[Any]] = [JOBS_HEADERS] + [_job_to_row(j) for j in jobs]
+    for i in range(0, len(all_rows), _BATCH_SIZE):
+        batch = all_rows[i:i + _BATCH_SIZE]
+        _sheets_write(lambda b=batch: ws.append_rows(b, value_input_option="RAW"))
+        if i + _BATCH_SIZE < len(all_rows):
+            time.sleep(_BATCH_DELAY_S)
 
 
 def get_jobs(filters: Optional[dict] = None) -> list[Job]:
@@ -580,7 +610,8 @@ def get_stats() -> dict[str, Any]:
 def _write_stats(stats: dict[str, Any]) -> None:
     """Overwrite the Stats sheet with the current aggregate data."""
     ws = _get_worksheet("Stats")
-    ws.clear()
+    _sheets_write(lambda: ws.clear())
+    time.sleep(_BATCH_DELAY_S)
 
     def section(label: str, data: dict[str, Any]) -> list[list[str]]:
         return [
@@ -609,7 +640,7 @@ def _write_stats(stats: dict[str, Any]) -> None:
         *section("BY JOB CATEGORY",      stats["by_job_category"]),
     ]
 
-    ws.append_rows(rows, value_input_option="RAW")
+    _sheets_write(lambda: ws.append_rows(rows, value_input_option="RAW"))
 
 
 def log_run(message: str, level: str = "INFO") -> None:
@@ -619,7 +650,6 @@ def log_run(message: str, level: str = "INFO") -> None:
         message: Human-readable description of the event.
         level:   Severity label — INFO, WARNING, ERROR, DEBUG.  Defaults to INFO.
     """
-    _get_worksheet("Logs").append_row(
-        [datetime.now(tz=timezone.utc).isoformat(), level.upper(), message],
-        value_input_option="RAW",
-    )
+    row = [datetime.now(tz=timezone.utc).isoformat(), level.upper(), message]
+    ws = _get_worksheet("Logs")
+    _sheets_write(lambda: ws.append_row(row, value_input_option="RAW"))

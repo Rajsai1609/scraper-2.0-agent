@@ -440,12 +440,12 @@ def pipeline() -> None:
     console.print(f"  [green]{total_inserted}[/green] new jobs inserted")
 
     console.print("\n[bold cyan]--- STEP 2: Enrich ---[/bold cyan]")
-    jobs = db.get_jobs()
+    # Use in-memory jobs — no read from Sheets during pipeline
     enriched = [
         cat_enricher.enrich_job(visa_enricher.enrich_job(
             exp_enricher.enrich_job(skills_enricher.enrich_job(j))
         ))
-        for j in jobs
+        for j in qualifying_jobs
     ]
     db.replace_all_jobs(enriched)
     console.print(f"  [green]{len(enriched)}[/green] jobs enriched")
