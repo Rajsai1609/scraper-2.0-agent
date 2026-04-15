@@ -45,6 +45,7 @@ def build_query(columns: list[str]) -> tuple[str, bool]:
 
 
 def main() -> None:
+    print(f"Looking for career-ops at: {TARGET_REPO}", flush=True)
     # Guard: target repo must exist
     if not TARGET_REPO.exists():
         print(f"ERROR: Target repo not found: {TARGET_REPO}", file=sys.stderr)
