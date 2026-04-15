@@ -60,6 +60,7 @@ jobs:
         run: python bridge/bridge.py
         env:
           PYTHONPATH: .
+          CAREER_OPS_PATH: ${{ github.workspace }}/ai-carrer-ops
 
       - name: Commit bridge last_run.json
         run: |

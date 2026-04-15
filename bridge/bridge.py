@@ -1,7 +1,7 @@
 """
 Bridge Layer: scraper-2.0-agent → ai-carrer-ops
 Reads qualified jobs from data/jobs.db and writes pipeline.md
-to the sibling ai-carrer-ops repo.
+to the ai-carrer-ops repo (checked out by CI or configured via env).
 """
 
 import sqlite3
@@ -13,7 +13,8 @@ from pathlib import Path
 from collections import Counter
 
 DB_PATH = Path(__file__).parent.parent / "data" / "jobs.db"
-TARGET_REPO = Path(__file__).parent.parent.parent / "ai-carrer-ops"
+_DEFAULT_CAREER_OPS_PATH = "/home/runner/work/scraper-2.0-agent/ai-carrer-ops"
+TARGET_REPO = Path(os.environ.get("CAREER_OPS_PATH", _DEFAULT_CAREER_OPS_PATH))
 TARGET_DIR = TARGET_REPO / "data"
 TARGET_FILE = TARGET_DIR / "pipeline.md"
 SUMMARY_FILE = Path(__file__).parent / "last_run.json"
@@ -44,10 +45,10 @@ def build_query(columns: list[str]) -> tuple[str, bool]:
 
 
 def main() -> None:
-    # Guard: sibling repo must exist
+    # Guard: target repo must exist
     if not TARGET_REPO.exists():
         print(f"ERROR: Target repo not found: {TARGET_REPO}", file=sys.stderr)
-        print("Make sure ai-carrer-ops is checked out as a sibling directory.", file=sys.stderr)
+        print("Set CAREER_OPS_PATH or ensure the repo is checked out at the default path.", file=sys.stderr)
         sys.exit(1)
 
     conn = sqlite3.connect(DB_PATH)
