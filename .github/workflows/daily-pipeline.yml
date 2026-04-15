@@ -1,0 +1,73 @@
+# PLACE THIS FILE AT:
+# scraper-2.0-agent/.github/workflows/daily-pipeline.yml
+#
+# (Rename to daily-pipeline.yml and remove this comment block)
+
+name: Daily Job Pipeline
+
+on:
+  schedule:
+    - cron: '0 14 * * *'  # 7AM PDT daily
+  workflow_dispatch:       # allow manual trigger
+
+jobs:
+  scrape-and-bridge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install supabase python-dotenv
+
+      - name: Run scraper
+        run: python -m src.cli scrape
+        env:
+          PYTHONPATH: .
+
+      - name: Check resume exists
+        id: check_resume
+        run: |
+          if [ -f "data/resume.txt" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  WARNING: data/resume.txt not found — skipping scorer step"
+          fi
+
+      - name: Run scorer
+        if: steps.check_resume.outputs.exists == 'true'
+        continue-on-error: true
+        run: python -m src.cli score
+        env:
+          PYTHONPATH: .
+
+      - name: Run bridge
+        run: python bridge/bridge.py
+        env:
+          PYTHONPATH: .
+
+      - name: Commit bridge last_run.json
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git add bridge/last_run.json
+          git diff --staged --quiet || git commit -m "chore: daily scrape $(date -u +%Y-%m-%d)"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger career-ops evaluation
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Rajsai1609/ai-carrer-ops/dispatches \
+            -d '{"event_type":"run-pipeline","client_payload":{"triggered_by":"scraper"}}'

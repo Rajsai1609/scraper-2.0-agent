@@ -1,0 +1,14 @@
+{
+  "run_at": "2026-04-11T08:04:06.769403+00:00",
+  "total_jobs_in_db": 1127,
+  "passed_score_filter": 92,
+  "visa_rejected": 0,
+  "urls_written": 92,
+  "top_companies": [
+    "OpenAI",
+    "Cohere",
+    "Perplexity",
+    "Notion",
+    "Ramp"
+  ]
+}

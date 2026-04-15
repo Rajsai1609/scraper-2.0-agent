@@ -1,7 +1,10 @@
 """
-Google Sheets database layer — "Scraper 2.0 - Job Intelligence"
+Database layer — SQLite (primary) + Google Sheets (optional).
 
-Sheet layout:
+SQLite is always available. Google Sheets is used only when
+config/google_credentials.json exists and gspread is installed.
+
+Sheet layout (when Sheets is enabled):
   Jobs  — one row per job, headers in row 1
   Stats — aggregate counts, rewritten on every get_stats() call
   Logs  — append-only run log with level column
@@ -10,15 +13,26 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import time
 from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Generator, Optional
 
-import gspread
+# ---------------------------------------------------------------------------
+# Optional gspread — imported only if available and credentials exist
+# ---------------------------------------------------------------------------
+
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials as _GCredentials
+    _GSPREAD_AVAILABLE = True
+except ImportError:
+    _GSPREAD_AVAILABLE = False
+
 from dotenv import load_dotenv
-from google.oauth2.service_account import Credentials
 
 from src.core.models import (
     ExperienceLevel,
@@ -39,6 +53,7 @@ CREDS_PATH: Path = Path(
 SPREADSHEET_NAME: str = os.getenv(
     "SPREADSHEET_NAME", "Scraper 2.0 - Job Intelligence"
 )
+SQLITE_PATH: Path = Path(os.getenv("SQLITE_PATH", "data/jobs.db"))
 
 SCOPES: list[str] = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -46,7 +61,7 @@ SCOPES: list[str] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Column definitions — order is the ground truth for serialisation
+# Column definitions — order is the ground truth for Sheets serialisation
 # ---------------------------------------------------------------------------
 
 JOBS_HEADERS: list[str] = [
@@ -82,23 +97,215 @@ _MAX_RETRIES: int = 5
 _BACKOFF_BASE_S: float = 2.0   # exponential-backoff base (seconds)
 
 # ---------------------------------------------------------------------------
-# Module-level connection state
+# Module-level Sheets connection state
 # ---------------------------------------------------------------------------
 
-_spreadsheet: Optional[gspread.Spreadsheet] = None
-_client: Optional[gspread.Client] = None
+_spreadsheet: Optional[Any] = None
+_client: Optional[Any] = None
+_sheets_ready: bool = False
 
 # In-memory ID cache — loaded once per process, updated on every insert
 _existing_ids: set[str] = set()
 _ids_loaded: bool = False
 
+# ---------------------------------------------------------------------------
+# SQLite helpers
+# ---------------------------------------------------------------------------
+
+_SQLITE_DDL = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id                TEXT PRIMARY KEY,
+    title             TEXT NOT NULL,
+    company           TEXT NOT NULL,
+    ats_platform      TEXT NOT NULL,
+    url               TEXT NOT NULL,
+    description       TEXT DEFAULT '',
+    location          TEXT DEFAULT '',
+    country           TEXT,
+    work_mode         TEXT DEFAULT 'unknown',
+    usa_region        TEXT DEFAULT '',
+    is_usa_job        INTEGER DEFAULT 0,
+    experience_level  TEXT DEFAULT 'unknown',
+    years_min         INTEGER,
+    years_max         INTEGER,
+    is_entry_eligible INTEGER DEFAULT 0,
+    h1b_sponsor       INTEGER,
+    opt_friendly      INTEGER,
+    stem_opt_eligible INTEGER,
+    visa_notes        TEXT DEFAULT '',
+    skills            TEXT DEFAULT '[]',
+    job_category      TEXT DEFAULT 'other',
+    fit_score         REAL,
+    date_posted       TEXT,
+    fetched_at        TEXT NOT NULL,
+    expires_at        TEXT NOT NULL
+)
+"""
+
+
+def init_db() -> None:
+    """Create the SQLite database and jobs table if they don't exist.
+
+    Safe to call multiple times — idempotent.
+    The data/ directory is created automatically if absent.
+    """
+    SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(SQLITE_PATH) as conn:
+        conn.execute(_SQLITE_DDL)
+        conn.commit()
+
+
+@contextmanager
+def _db_conn() -> Generator[sqlite3.Connection, None, None]:
+    """Yield a SQLite connection with row_factory set."""
+    conn = sqlite3.connect(SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def save_job(job: Job) -> bool:
+    """Insert job into SQLite.  Returns True if inserted, False if duplicate."""
+    row = (
+        job.id,
+        job.title,
+        job.company,
+        job.ats_platform,
+        job.url,
+        job.description,
+        job.location,
+        job.country,
+        job.work_mode.value,
+        job.usa_region,
+        int(job.is_usa_job),
+        job.experience_level.value,
+        job.years_min,
+        job.years_max,
+        int(job.is_entry_eligible),
+        None if job.h1b_sponsor is None else int(job.h1b_sponsor),
+        None if job.opt_friendly is None else int(job.opt_friendly),
+        None if job.stem_opt_eligible is None else int(job.stem_opt_eligible),
+        job.visa_notes,
+        json.dumps(job.skills),
+        job.job_category.value,
+        job.fit_score,
+        job.date_posted.isoformat() if job.date_posted else None,
+        job.fetched_at.isoformat(),
+        job.expires_at.isoformat(),
+    )
+    with _db_conn() as conn:
+        cursor = conn.execute(
+            """
+            INSERT OR IGNORE INTO jobs (
+                id, title, company, ats_platform, url, description,
+                location, country, work_mode, usa_region, is_usa_job,
+                experience_level, years_min, years_max, is_entry_eligible,
+                h1b_sponsor, opt_friendly, stem_opt_eligible, visa_notes,
+                skills, job_category, fit_score,
+                date_posted, fetched_at, expires_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            row,
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def save_jobs_batch(jobs: list[Job]) -> tuple[int, int]:
+    """Insert all jobs not already in SQLite.  Returns (inserted, skipped)."""
+    inserted = skipped = 0
+    for job in jobs:
+        if save_job(job):
+            inserted += 1
+        else:
+            skipped += 1
+    return inserted, skipped
+
+
+def job_exists_sqlite(job_id: str) -> bool:
+    """Return True if the job_id is already in the SQLite database."""
+    with _db_conn() as conn:
+        row = conn.execute("SELECT 1 FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        return row is not None
+
+
+def get_jobs(filters: Optional[dict] = None) -> list[Job]:
+    """
+    Read jobs from SQLite, deserialise to Job objects, apply in-memory filters.
+
+    Supported filter keys match the Sheets version:
+      work_mode, usa_region, experience_level, is_entry_eligible,
+      h1b_sponsor, opt_friendly, stem_opt_eligible, job_category,
+      min_score, max_years, is_usa_job
+    """
+    with _db_conn() as conn:
+        rows = conn.execute("SELECT * FROM jobs").fetchall()
+
+    jobs: list[Job] = []
+    for row in rows:
+        try:
+            jobs.append(_sqlite_row_to_job(row))
+        except Exception:
+            continue
+
+    return _apply_filters(jobs, filters or {})
+
+
+def _sqlite_row_to_job(row: sqlite3.Row) -> Job:
+    def _opt_bool(v: Optional[int]) -> Optional[bool]:
+        return None if v is None else bool(v)
+
+    def _opt_dt(v: Optional[str]) -> Optional[datetime]:
+        return datetime.fromisoformat(v) if v else None
+
+    def _enum(cls, v: str, default):
+        try:
+            return cls(v) if v else default
+        except ValueError:
+            return default
+
+    return Job(
+        id=row["id"],
+        title=row["title"],
+        company=row["company"],
+        ats_platform=row["ats_platform"],
+        url=row["url"],
+        description=row["description"] or "",
+        location=row["location"] or "",
+        country=row["country"],
+        work_mode=_enum(WorkMode, row["work_mode"], WorkMode.UNKNOWN),
+        usa_region=row["usa_region"] or "",
+        is_usa_job=bool(row["is_usa_job"]),
+        experience_level=_enum(ExperienceLevel, row["experience_level"], ExperienceLevel.UNKNOWN),
+        years_min=row["years_min"],
+        years_max=row["years_max"],
+        is_entry_eligible=bool(row["is_entry_eligible"]),
+        h1b_sponsor=_opt_bool(row["h1b_sponsor"]),
+        opt_friendly=_opt_bool(row["opt_friendly"]),
+        stem_opt_eligible=_opt_bool(row["stem_opt_eligible"]),
+        visa_notes=row["visa_notes"] or "",
+        skills=json.loads(row["skills"] or "[]"),
+        job_category=_enum(JobCategory, row["job_category"], JobCategory.OTHER),
+        fit_score=row["fit_score"],
+        date_posted=_opt_dt(row["date_posted"]),
+        fetched_at=datetime.fromisoformat(row["fetched_at"]),
+        expires_at=datetime.fromisoformat(row["expires_at"]),
+    )
+
 
 # ---------------------------------------------------------------------------
-# Connection helpers
+# Google Sheets connection helpers
 # ---------------------------------------------------------------------------
 
-def _build_client() -> gspread.Client:
-    creds = Credentials.from_service_account_file(str(CREDS_PATH), scopes=SCOPES)
+def _sheets_configured() -> bool:
+    """Return True if gspread is installed and credentials file exists."""
+    return _GSPREAD_AVAILABLE and CREDS_PATH.exists()
+
+
+def _build_client() -> Any:
+    creds = _GCredentials.from_service_account_file(str(CREDS_PATH), scopes=SCOPES)
     return gspread.authorize(creds)
 
 
@@ -107,9 +314,16 @@ def init_sheets() -> None:
     Authenticate with the service account, open (or create) the spreadsheet,
     and ensure all three worksheets exist with correct headers.
 
+    If gspread is not installed or credentials file is missing, prints a
+    notice and returns silently — does NOT raise.
+
     Safe to call multiple times — idempotent.
     """
-    global _spreadsheet, _client
+    global _spreadsheet, _client, _sheets_ready
+
+    if not _sheets_configured():
+        print("Google Sheets not configured, using SQLite only")
+        return
 
     _client = _build_client()
 
@@ -121,15 +335,16 @@ def init_sheets() -> None:
     _ensure_worksheet("Jobs", JOBS_HEADERS)
     _ensure_worksheet("Stats", STATS_HEADERS)
     _ensure_worksheet("Logs", LOGS_HEADERS)
+    _sheets_ready = True
 
 
-def _get_spreadsheet() -> gspread.Spreadsheet:
+def _get_spreadsheet() -> Any:
     if _spreadsheet is None:
         raise RuntimeError("Sheets not initialised — call init_sheets() first.")
     return _spreadsheet
 
 
-def _get_worksheet(name: str) -> gspread.Worksheet:
+def _get_worksheet(name: str) -> Any:
     """
     Return the named worksheet, transparently reconnecting if the OAuth
     session has expired (HTTP 401 from the Sheets API).
@@ -139,7 +354,6 @@ def _get_worksheet(name: str) -> gspread.Worksheet:
     try:
         return _get_spreadsheet().worksheet(name)
     except gspread.exceptions.APIError as exc:
-        # 401 Unauthorized — token expired; rebuild client and re-open
         if exc.response.status_code == 401:
             _client = _build_client()
             _spreadsheet = _client.open(SPREADSHEET_NAME)
@@ -192,7 +406,7 @@ def _load_existing_ids() -> set[str]:
 
 
 # ---------------------------------------------------------------------------
-# Serialisation helpers
+# Sheets serialisation helpers
 # ---------------------------------------------------------------------------
 
 def _bool_cell(v: bool) -> str:
@@ -313,18 +527,18 @@ def _row_to_job(row: list[str]) -> Job:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Sheets public API (unchanged — guarded by _sheets_ready where needed)
 # ---------------------------------------------------------------------------
 
 def job_exists(job_id: str) -> bool:
-    """Return True if job_id is already in the Jobs sheet (uses in-memory cache)."""
+    """Return True if job_id is in the Jobs sheet (uses in-memory cache)."""
     return job_id in _load_existing_ids()
 
 
 def insert_job(job: Job) -> bool:
     """
-    Append job as a new row.  Returns True if inserted, False if skipped
-    because the id was already present.  Uses exponential backoff on 429.
+    Append job as a new row in Sheets.  Returns True if inserted, False if
+    skipped because the id was already present.  Uses exponential backoff on 429.
     """
     if job_exists(job.id):
         return False
@@ -393,12 +607,12 @@ def insert_jobs_batch(jobs: list[Job]) -> int:
 
 def update_job(job_id: str, updates: dict[str, Any]) -> bool:
     """
-    Update specific columns of an existing job row by id.
+    Update specific columns of an existing job row in Sheets by id.
     Returns True if the row was found and updated, False otherwise.
     """
     ws = _get_worksheet("Jobs")
     ids = ws.col_values(_ID_COL)
-    data_ids = ids[1:]  # skip header at ids[0]
+    data_ids = ids[1:]
     try:
         list_idx = data_ids.index(job_id)
     except ValueError:
@@ -431,24 +645,8 @@ def replace_all_jobs(jobs: list[Job]) -> None:
             time.sleep(_BATCH_DELAY_S)
 
 
-def get_jobs(filters: Optional[dict] = None) -> list[Job]:
-    """
-    Read every data row from the Jobs sheet, deserialise to Job objects,
-    then apply in-memory filters.
-
-    Supported filter keys:
-      work_mode        (str)   — exact WorkMode value  e.g. "remote"
-      usa_region       (str)   — exact usa_region value e.g. "Northeast"
-      experience_level (str)   — exact ExperienceLevel value
-      is_entry_eligible (bool) — True = entry-eligible only
-      h1b_sponsor      (bool)  — True = h1b_sponsor is True
-      opt_friendly     (bool)  — True = opt_friendly is True
-      stem_opt_eligible (bool) — True = stem_opt_eligible is True
-      job_category     (str)   — exact JobCategory value e.g. "ml_ai_engineer"
-      min_score        (float) — minimum fit_score; rows with no score excluded
-      max_years        (int)   — years_min <= max_years (or years_min is None)
-      is_usa_job       (bool)  — True = USA jobs only
-    """
+def get_jobs_from_sheets(filters: Optional[dict] = None) -> list[Job]:
+    """Read every data row from the Jobs sheet and apply in-memory filters."""
     rows = _get_worksheet("Jobs").get_all_values()
     if len(rows) <= 1:
         return []
@@ -458,7 +656,7 @@ def get_jobs(filters: Optional[dict] = None) -> list[Job]:
         try:
             jobs.append(_row_to_job(row))
         except Exception:
-            continue  # skip malformed rows silently
+            continue
 
     return _apply_filters(jobs, filters or {})
 
@@ -504,8 +702,7 @@ def _apply_filters(jobs: list[Job], filters: dict) -> list[Job]:
 
 def delete_expired() -> int:
     """
-    Delete rows in Jobs where expires_at < now (UTC).
-    Deletes bottom-to-top so sheet row indices stay valid throughout.
+    Delete rows in Jobs sheet where expires_at < now (UTC).
     Returns the number of rows deleted.
     """
     ws = _get_worksheet("Jobs")
@@ -517,7 +714,7 @@ def delete_expired() -> int:
     exp_idx = JOBS_HEADERS.index("expires_at")
     expired: list[int] = []
 
-    for sheet_row, row in enumerate(rows[1:], start=2):  # row 1 is header
+    for sheet_row, row in enumerate(rows[1:], start=2):
         padded = row + [""] * (len(JOBS_HEADERS) - len(row))
         raw = padded[exp_idx].strip()
         if not raw:
@@ -539,17 +736,8 @@ def delete_expired() -> int:
 
 def get_stats() -> dict[str, Any]:
     """
-    Aggregate counts from all jobs in the Jobs sheet.
-    Writes the full breakdown to the Stats sheet and returns the dict.
-
-    Scalar counts:
-      total_jobs, remote_count, hybrid_count, onsite_count,
-      new_grad_count, junior_count, h1b_sponsor_count,
-      opt_friendly_count, stem_opt_count, entry_eligible_count
-
-    Distribution counts (dicts):
-      by_company (top 20 by count), by_ats_platform,
-      by_usa_region, by_job_category
+    Aggregate counts from all jobs in SQLite (or Sheets if active).
+    When Sheets is active, also writes the breakdown to the Stats sheet.
     """
     jobs = get_jobs()
 
@@ -584,7 +772,6 @@ def get_stats() -> dict[str, Any]:
         if job.is_entry_eligible:         entry_count += 1
 
     stats: dict[str, Any] = {
-        # scalars
         "total_jobs":          len(jobs),
         "remote_count":        remote_count,
         "hybrid_count":        hybrid_count,
@@ -595,7 +782,6 @@ def get_stats() -> dict[str, Any]:
         "opt_friendly_count":  opt_count,
         "stem_opt_count":      stem_count,
         "entry_eligible_count": entry_count,
-        # distributions
         "by_company":      dict(company_counter.most_common(20)),
         "by_ats_platform": dict(ats_counter.most_common()),
         "by_usa_region":   dict(region_counter.most_common()),
@@ -603,7 +789,8 @@ def get_stats() -> dict[str, Any]:
         "last_updated":    datetime.now(tz=timezone.utc).isoformat(),
     }
 
-    _write_stats(stats)
+    if _sheets_ready:
+        _write_stats(stats)
     return stats
 
 
@@ -622,7 +809,6 @@ def _write_stats(stats: dict[str, Any]) -> None:
 
     rows: list[list[str]] = [
         STATS_HEADERS,
-        # summary scalars
         ["total_jobs",           str(stats["total_jobs"])],
         ["remote_count",         str(stats["remote_count"])],
         ["hybrid_count",         str(stats["hybrid_count"])],
@@ -643,13 +829,34 @@ def _write_stats(stats: dict[str, Any]) -> None:
     _sheets_write(lambda: ws.append_rows(rows, value_input_option="RAW"))
 
 
+def update_fit_scores(jobs: list[Job]) -> int:
+    """Update the fit_score column in SQLite for each job by id.
+
+    Returns the number of rows updated.
+    """
+    updated = 0
+    with _db_conn() as conn:
+        for job in jobs:
+            cursor = conn.execute(
+                "UPDATE jobs SET fit_score = ? WHERE id = ?",
+                (job.fit_score, job.id),
+            )
+            updated += cursor.rowcount
+        conn.commit()
+    return updated
+
+
 def log_run(message: str, level: str = "INFO") -> None:
-    """Append a timestamped entry to the Logs sheet.
+    """Log a timestamped run event to stdout (and Sheets when active).
 
     Args:
         message: Human-readable description of the event.
-        level:   Severity label — INFO, WARNING, ERROR, DEBUG.  Defaults to INFO.
+        level:   Severity label — INFO, WARNING, ERROR, DEBUG.
     """
-    row = [datetime.now(tz=timezone.utc).isoformat(), level.upper(), message]
-    ws = _get_worksheet("Logs")
-    _sheets_write(lambda: ws.append_row(row, value_input_option="RAW"))
+    ts = datetime.now(tz=timezone.utc).isoformat()
+    print(f"[{ts}] {level.upper()} {message}")
+
+    if _sheets_ready:
+        row = [ts, level.upper(), message]
+        ws = _get_worksheet("Logs")
+        _sheets_write(lambda: ws.append_row(row, value_input_option="RAW"))

@@ -1,0 +1,42 @@
+Rajsai Naredla
+rajsainaredla114@gmail.com | +1 (413) 330-2587 | Bothell, WA
+linkedin.com/in/rajsainaredla09
+
+SUMMARY
+AI Architect and Founder of MCTechnology LLC. Specialized in multi-agent AI systems, 
+cloud automation, data engineering, and full-stack AI product development.
+
+EXPERIENCE
+
+Founder & AI Architect — MCTechnology LLC (Sept 2025 - Present)
+- Built multi-agent AI automation systems for restaurants, real estate, and career intelligence
+- Deployed production systems on Railway, Supabase, Netlify, Streamlit
+- Built MCT PathAI job intelligence platform with automated scraping and resume tailoring
+- Built AVM real estate valuation tool (XGBoost, R2=0.9523) on Redfin Seattle data
+- Stack: Python, Node.js, TypeScript, Claude API, OpenAI, Supabase, GitHub Actions
+
+Data Analyst — Metro One Loss Prevention (Sept 2024 - Sept 2025)
+- GCP and cloud data pipeline development
+- BigQuery, Looker Studio, Python analytics
+
+Data Analyst — TCS (Prior)
+- AI/ML focused data analysis
+- Python, SQL, machine learning model deployment
+
+EDUCATION
+Master's in Cloud Computing — Campbellsville University
+Bachelor's in Electrical & Electronics Engineering
+
+SKILLS
+Python, Node.js, TypeScript, JavaScript, SQL
+Claude API, OpenAI API, LangChain, multi-agent systems
+Supabase, PostgreSQL, SQLite, BigQuery
+GCP, Railway, Netlify, Vercel, Streamlit
+GitHub Actions, Docker, REST APIs
+Machine learning, XGBoost, scikit-learn, sentence-transformers
+FastAPI, Fastify, Prisma, BullMQ, Redis
+Web scraping, Playwright, BeautifulSoup
+
+TARGET ROLES
+AI Engineer, ML Engineer, Data Engineer, AI Solutions Architect,
+Full Stack AI Developer, Cloud Data Engineer
