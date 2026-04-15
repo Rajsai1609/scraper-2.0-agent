@@ -25,7 +25,14 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install supabase python-dotenv
+          pip install supabase python-dotenv psycopg2-binary
+
+      - name: Apply Supabase migrations
+        continue-on-error: true
+        run: python setup_supabase.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
 
       - name: Run scraper
         run: python -m src.cli scrape
