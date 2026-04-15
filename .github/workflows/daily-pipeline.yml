@@ -49,6 +49,14 @@ jobs:
         env:
           PYTHONPATH: .
 
+      - name: Sync jobs to Supabase
+        continue-on-error: true
+        run: python sync_jobs_to_supabase.py
+        env:
+          PYTHONPATH: .
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
       - name: Run multi-student scorer
         continue-on-error: true
         run: python step3_multi_scorer.py
