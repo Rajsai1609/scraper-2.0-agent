@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Step 1 — Ingest student resumes into Supabase (MCT-Alesia).
+Step 1 -- Ingest student resumes into Supabase (MCT-Alesia).
 
 Reads every .pdf and .docx file from the RESUME_DIR, extracts text and
 skills, then upserts each student record into the `students` table.
-Idempotent — re-running updates skills/resume_text but keeps the same UUID.
+Idempotent -- re-running updates skills/resume_text but keeps the same UUID.
 
 Run once locally after adding / updating resumes:
     python step1_ingest_resumes.py
 
-Extra deps (install locally — not needed in CI):
+Extra deps (install locally -- not needed in CI):
     pip install pypdf python-docx supabase python-dotenv
 
 Required env vars (add to .env or export before running):
@@ -47,7 +47,7 @@ def _extract_pdf(path: Path) -> str:
     try:
         from pypdf import PdfReader  # type: ignore[import]
     except ImportError:
-        raise ImportError("pypdf not installed — run: pip install pypdf")
+        raise ImportError("pypdf not installed -- run: pip install pypdf")
 
     reader = PdfReader(str(path))
     pages = [page.extract_text() or "" for page in reader.pages]
@@ -59,7 +59,7 @@ def _extract_docx(path: Path) -> str:
     try:
         from docx import Document  # type: ignore[import]
     except ImportError:
-        raise ImportError("python-docx not installed — run: pip install python-docx")
+        raise ImportError("python-docx not installed -- run: pip install python-docx")
 
     doc = Document(str(path))
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
@@ -85,16 +85,16 @@ def extract_name(filename: str) -> str:
     Derive a human-readable name from a resume filename.
 
     Examples:
-      "Akhila Resume.docx"       → "Akhila"
-      "MPavan Resume.docx"       → "M Pavan"
-      "Sucharan-Resume.pdf"      → "Sucharan"
-      "Unnatha_BI_Resume.docx"   → "Unnatha Bi"
-      "vinit Resume.pdf"         → "Vinit"
+      "Akhila Resume.docx"       -> "Akhila"
+      "MPavan Resume.docx"       -> "M Pavan"
+      "Sucharan-Resume.pdf"      -> "Sucharan"
+      "Unnatha_BI_Resume.docx"   -> "Unnatha Bi"
+      "vinit Resume.pdf"         -> "Vinit"
     """
     stem = Path(filename).stem  # strip extension
     # Remove "Resume" and everything that follows (plus preceding separators)
     stem = re.sub(r"[\s\-_]*resume.*$", "", stem, flags=re.IGNORECASE)
-    # Split camelCase: "MPavan" → "M Pavan"
+    # Split camelCase: "MPavan" -> "M Pavan"
     stem = re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", stem)
     # Replace underscores / hyphens with spaces, normalize whitespace
     stem = re.sub(r"[\-_]+", " ", stem)
@@ -129,7 +129,7 @@ def _get_supabase_client():
     try:
         from supabase import create_client  # type: ignore[import]
     except ImportError:
-        raise ImportError("supabase not installed — run: pip install supabase")
+        raise ImportError("supabase not installed -- run: pip install supabase")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
@@ -183,12 +183,12 @@ def run() -> None:
 
     for path in sorted(resume_files):
         name = extract_name(path.name)
-        print(f"  {path.name}  →  {name!r} ...", end=" ", flush=True)
+        print(f"  {path.name}  ->  {name!r} ...", end=" ", flush=True)
 
         try:
             text = extract_text(path)
             if not text.strip():
-                print("⚠  empty text — skipped")
+                print("⚠  empty text -- skipped")
                 errors.append(f"{path.name}: empty text")
                 continue
 
@@ -201,11 +201,11 @@ def run() -> None:
                 skills=skills,
             )
             student_id = record.get("id", "unknown")
-            print(f"✓  id={student_id[:8]}  skills={len(skills)}")
+            print(f"OK  id={student_id[:8]}  skills={len(skills)}")
             inserted += 1
 
         except Exception as exc:
-            print(f"✗  {exc}")
+            print(f"ERR  {exc}")
             errors.append(f"{path.name}: {exc}")
 
     print(f"\n{'='*50}")
