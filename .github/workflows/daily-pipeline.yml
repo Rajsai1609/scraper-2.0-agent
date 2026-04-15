@@ -49,6 +49,13 @@ jobs:
         env:
           PYTHONPATH: .
 
+      - name: Checkout ai-carrer-ops
+        uses: actions/checkout@v4
+        with:
+          repository: Rajsai1609/ai-carrer-ops
+          token: ${{ secrets.GH_PAT }}
+          path: ai-carrer-ops
+
       - name: Run bridge
         run: python bridge/bridge.py
         env:
