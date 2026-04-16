@@ -95,11 +95,18 @@ def _row_to_job(row: object, site: str, date_posted: Optional[datetime]) -> Opti
     location = _str(row.get("location", ""))  # type: ignore[union-attr]
     description = _str(row.get("description", ""))  # type: ignore[union-attr]
 
-    # Build a platform-native ID (e.g. linkedin-12345678, indeed-abc123).
-    # This matches the ashby-xxx / greenhouse-xxx format used by ATS fetchers
-    # and ensures the JOIN with student_job_scores works in the dashboard.
+    # Build a platform-native ID (e.g. linkedin-4402041676, indeed-644c7f92).
+    # JobSpy already prefixes its own IDs: li-xxx, in-xxx, gl-xxx, zip-xxx.
+    # Strip that internal prefix before adding our canonical site prefix so we
+    # don't produce doubled prefixes like "indeed-in-644c7f92".
     raw_id = _str(row.get("id"))  # type: ignore[union-attr]
-    platform_id = f"{site}-{raw_id}" if raw_id else ""
+    if raw_id:
+        # Strip known JobSpy prefixes (li-, in-, gl-, zip-)
+        import re as _re
+        stripped_id = _re.sub(r"^(li|in|gl|zip)-", "", raw_id)
+        platform_id = f"{site}-{stripped_id}"
+    else:
+        platform_id = ""
 
     # Work mode detection from JobSpy's is_remote flag
     is_remote = row.get("is_remote")  # type: ignore[union-attr]
