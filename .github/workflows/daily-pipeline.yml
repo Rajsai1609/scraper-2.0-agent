@@ -34,6 +34,18 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
 
+      - name: Auto-ingest new waitlist students
+        continue-on-error: true
+        run: python auto_ingest_waitlist.py
+        env:
+          PYTHONPATH: .
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+
       - name: Run scraper
         run: python -m src.cli scrape
         env:
