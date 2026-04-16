@@ -203,28 +203,11 @@ def score_student(client, student: dict) -> int:
 # Email confirmation
 # ---------------------------------------------------------------------------
 
-def send_confirmation(to_email: str, to_name: str) -> bool:
-    """Send a confirmation email to the new student. Returns True on success."""
+def _send_email(to_email: str, subject: str, body: str) -> bool:
+    """Low-level SMTP send. Returns True on success."""
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASS]):
         print("    SMTP not configured — skipping email.")
         return False
-
-    subject = "Your MCT PathAI dashboard is ready! 🎯"
-    body = f"""\
-Hi {to_name},
-
-Great news — your resume has been processed and your personalised job \
-dashboard is now live!
-
-Your top matches are ready to view. Open your dashboard to see \
-AI-ranked job opportunities tailored specifically to your skills \
-and visa status.
-
-Reach out any time at connect@theteammc.com if you have questions.
-
-— The MCT PathAI Team
-Powered by MCTechnology LLC
-"""
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -244,6 +227,51 @@ Powered by MCTechnology LLC
         return False
 
 
+def send_confirmation(to_email: str, to_name: str) -> bool:
+    """Email sent when the student is fully ingested and dashboard is live."""
+    subject = "You're in! Your MCT PathAI dashboard is live 🎯"
+    body = f"""\
+Hi {to_name},
+
+Great news — your resume has been processed and your personalised \
+job dashboard is now live!
+
+View your matches at: https://mctpathai.com
+
+Your top opportunities are ranked by AI match score, all \
+pre-filtered for your visa status.
+
+Reach out any time at connect@theteammc.com if you have questions.
+
+— The MCT PathAI Team
+Powered by MCTechnology LLC
+"""
+    return _send_email(to_email, subject, body)
+
+
+def send_waitlisted(to_email: str, to_name: str) -> bool:
+    """Email sent when the beta is full and the student stays on the waitlist."""
+    subject = "You're on the MCT PathAI waitlist!"
+    body = f"""\
+Hi {to_name},
+
+Thanks for signing up for MCT PathAI!
+
+We've received your resume and you're on our waitlist. \
+Our beta is currently at capacity (20 students), but we'll \
+notify you as soon as your spot opens up.
+
+In the meantime, follow us on LinkedIn for updates:
+https://www.linkedin.com/company/106539005/
+
+Questions? Reach us at connect@theteammc.com.
+
+— The MCT PathAI Team
+Powered by MCTechnology LLC
+"""
+    return _send_email(to_email, subject, body)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -253,14 +281,36 @@ def run() -> None:
     print("MCT PathAI — Auto-Ingest Waitlist")
     print("=" * 60)
 
-    client  = _get_client()
-    pending = fetch_pending(client)
+    client = _get_client()
 
-    if not pending:
-        print("\nNo new waitlist submissions to process. ✓")
+    # ── Beta limit check ─────────────────────────────────────────────────────
+    BETA_LIMIT = 20
+    count_res  = client.table("students").select("id", count="exact").execute()
+    current_count = count_res.count or 0
+
+    if current_count >= BETA_LIMIT:
+        print(f"\nBeta full — {current_count}/{BETA_LIMIT} students.")
+        print("New signups stay in waitlist until limit increases.")
         return
 
-    print(f"\n{len(pending)} new submission(s) found.\n")
+    slots_remaining = BETA_LIMIT - current_count
+    print(f"\nBeta slots remaining: {slots_remaining}/{BETA_LIMIT}")
+
+    pending = fetch_pending(client)
+    if not pending:
+        print("No new waitlist submissions to process. ✓")
+        return
+
+    # Send waitlisted email to any submissions that exceed the slot count
+    if len(pending) > slots_remaining:
+        overflow = pending[slots_remaining:]
+        pending  = pending[:slots_remaining]
+        print(f"{len(overflow)} submission(s) exceed remaining slots — notifying them.")
+        for entry in overflow:
+            sent = send_waitlisted(entry["email"], entry["name"])
+            print(f"  Waitlist email {'sent ✓' if sent else 'skipped'} → {entry['name']}")
+
+    print(f"\n{len(pending)} submission(s) to ingest.\n")
 
     success = failed = 0
 
