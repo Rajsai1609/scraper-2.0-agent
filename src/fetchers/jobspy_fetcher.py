@@ -52,7 +52,8 @@ def fetch_all_jobs() -> tuple[list[Job], dict[str, int]]:
                 location=LOCATION,
                 results_wanted=RESULTS_PER_TERM,
                 hours_old=HOURS_OLD,
-                country_indeed="usa",   # prevents invalid-country errors (cyprus, lesotho, etc.)
+                country_indeed="usa",    # pins Indeed to USA, avoids invalid-country errors
+                country_glassdoor="usa", # same gate for Glassdoor
             )
         except Exception as exc:
             logger.warning("JobSpy error for '%s': %s", term, exc)
