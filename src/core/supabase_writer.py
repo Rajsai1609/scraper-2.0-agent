@@ -1,39 +1,13 @@
 """
-Supabase write-through layer — upserts scraped jobs to the `scraped_jobs` table.
+Job-model → dict converter + Supabase write-through.
 
-Called after every scrape run.  Requires SUPABASE_URL and SUPABASE_KEY in .env
-(or environment).  If credentials are absent the module degrades gracefully and
-logs a warning so the local SQLite pipeline is never blocked.
-
-Table columns mirror the Job model.  Fields that the dashboard reads
-(scraper_score, visa_flag) are mapped explicitly.
+Converts Job objects to scraped_jobs table rows, then delegates
+to supabase_db.upsert_jobs_to_supabase() for the actual write.
 """
 from __future__ import annotations
 
-import json
-import os
-from typing import Optional
-
-from dotenv import load_dotenv
-
 from src.core.models import Job
-
-load_dotenv()
-
-_BATCH_SIZE = 100  # rows per upsert call
-
-
-def _get_client():
-    """Return a Supabase client or None if credentials are missing."""
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_KEY", "")
-    if not url or not key:
-        return None
-    try:
-        from supabase import create_client
-        return create_client(url, key)
-    except Exception:
-        return None
+from src.core import supabase_db
 
 
 def _job_to_row(job: Job) -> dict:
@@ -57,7 +31,7 @@ def _job_to_row(job: Job) -> dict:
         "h1b_sponsor": job.h1b_sponsor,
         "opt_friendly": job.opt_friendly,
         "stem_opt_eligible": job.stem_opt_eligible,
-        "visa_flag": job.h1b_sponsor is False,  # flagged when explicitly NOT sponsoring
+        "visa_flag": job.h1b_sponsor is False,
         "visa_notes": job.visa_notes or "",
         "skills": job.skills,
         "job_category": job.job_category.value,
@@ -70,32 +44,16 @@ def _job_to_row(job: Job) -> dict:
 
 def upsert_jobs(jobs: list[Job]) -> tuple[int, int]:
     """
-    Upsert jobs into the Supabase `scraped_jobs` table.
-
-    Uses ON CONFLICT (id) DO UPDATE via Supabase's upsert() so re-runs
-    update stale rows rather than creating duplicates.
-
+    Convert Jobs to dicts and upsert to Supabase scraped_jobs.
     Returns (upserted_count, error_count).
     """
     if not jobs:
         return 0, 0
 
-    client = _get_client()
-    if client is None:
-        print("[supabase_writer] SUPABASE_URL / SUPABASE_KEY not set — skipping Supabase write.")
-        return 0, 0
-
     rows = [_job_to_row(j) for j in jobs]
-    upserted = 0
-    errors = 0
-
-    for i in range(0, len(rows), _BATCH_SIZE):
-        batch = rows[i : i + _BATCH_SIZE]
-        try:
-            client.table("scraped_jobs").upsert(batch, on_conflict="id").execute()
-            upserted += len(batch)
-        except Exception as exc:
-            print(f"[supabase_writer] Batch {i // _BATCH_SIZE + 1} failed: {exc}")
-            errors += len(batch)
-
-    return upserted, errors
+    try:
+        supabase_db.upsert_jobs_to_supabase(rows)
+        return len(rows), 0
+    except Exception as exc:
+        print(f"[supabase_writer] Upsert failed: {exc}")
+        return 0, len(rows)
