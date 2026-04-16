@@ -2,22 +2,21 @@
 """
 Step 3 — Multi-student job scorer.
 
-Loads every student from Supabase, loads all jobs from SQLite, and scores
-each job against each student's resume using all-MiniLM-L6-v2 (the same
-model the existing single-student scorer uses).  Results are upserted to
+Loads every student from Supabase, loads all USA jobs from the Supabase
+`scraped_jobs` table (NOT SQLite), and scores each job against each
+student's resume using all-MiniLM-L6-v2.  Results are upserted to
 `student_job_scores` in Supabase.
 
-Run in CI *after* the single-student scorer step:
+Using Supabase as the job source guarantees that job_id values in
+student_job_scores match scraped_jobs.id exactly, so the dashboard
+JOIN works correctly.
+
+Run after the scraper pipeline has synced jobs to Supabase:
     python step3_multi_scorer.py
 
 Env vars required:
     SUPABASE_URL
     SUPABASE_SERVICE_KEY
-
-Performance notes:
-  - Job descriptions are batch-encoded once (shared across all students).
-  - Per-student cost is: 1 encode call + 1 vectorised cosine-similarity.
-  - 5 students × 5000 jobs ≈ 2 min on CPU (dominated by job encoding).
 """
 from __future__ import annotations
 
@@ -25,7 +24,6 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -39,12 +37,10 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-SQLITE_PATH = Path(os.getenv("SQLITE_PATH", "data/jobs.db"))
 
-# Supabase batch upsert size — keep well under the 1 MB request limit
-_UPSERT_BATCH = 200
-# Pause between batches to avoid Supabase rate limits
-_UPSERT_DELAY = 0.2
+_JOBS_PAGE_SIZE = 1000   # Supabase max rows per request
+_UPSERT_BATCH   = 200    # rows per score upsert call
+_UPSERT_DELAY   = 0.2    # seconds between upsert batches
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +53,7 @@ def _get_supabase():
             "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set."
         )
     try:
-        from supabase import create_client  # type: ignore[import]
+        from supabase import create_client
     except ImportError:
         raise ImportError("supabase not installed — run: pip install supabase")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -73,6 +69,37 @@ def load_students(client) -> list[dict[str, Any]]:
     return result.data or []
 
 
+def load_jobs_from_supabase(client) -> list[dict[str, Any]]:
+    """
+    Return all USA jobs from Supabase scraped_jobs.
+
+    Fetches id, description, and skills — the only fields needed for
+    scoring.  Paginates in batches of 1000 to retrieve the full set.
+    Using Supabase IDs ensures student_job_scores.job_id matches
+    scraped_jobs.id for the dashboard JOIN.
+    """
+    all_jobs: list[dict[str, Any]] = []
+    offset = 0
+
+    while True:
+        result = (
+            client.table("scraped_jobs")
+            .select("id, description, skills")
+            .eq("is_usa_job", True)
+            .range(offset, offset + _JOBS_PAGE_SIZE - 1)
+            .execute()
+        )
+        batch = result.data or []
+        all_jobs.extend(batch)
+        print(f"    fetched {len(all_jobs)} jobs so far...", end="\r")
+        if len(batch) < _JOBS_PAGE_SIZE:
+            break
+        offset += _JOBS_PAGE_SIZE
+
+    print()  # newline after \r
+    return all_jobs
+
+
 def upsert_scores_batch(client, rows: list[dict]) -> int:
     """Upsert a batch of score rows; returns number of rows upserted."""
     result = (
@@ -84,51 +111,15 @@ def upsert_scores_batch(client, rows: list[dict]) -> int:
 
 
 # ---------------------------------------------------------------------------
-# SQLite helpers
-# ---------------------------------------------------------------------------
-
-def load_jobs_from_sqlite() -> list[dict[str, Any]]:
-    """Return all job rows as dicts from the local SQLite db."""
-    import sqlite3
-
-    if not SQLITE_PATH.exists():
-        raise FileNotFoundError(f"SQLite database not found: {SQLITE_PATH}")
-
-    conn = sqlite3.connect(SQLITE_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        rows = conn.execute(
-            """
-            SELECT id, description, skills FROM jobs
-            WHERE is_usa_job = 1
-               OR usa_region != ''
-               OR location LIKE '%USA%'
-               OR location LIKE '%United States%'
-               OR location LIKE '%, CA%'
-               OR location LIKE '%, NY%'
-               OR location LIKE '%, WA%'
-               OR location LIKE '%, TX%'
-               OR location LIKE '%, MA%'
-            """
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
-
-
-# ---------------------------------------------------------------------------
 # Scoring utilities
 # ---------------------------------------------------------------------------
 
 def _load_model():
-    """Return the cached SentenceTransformer model (all-MiniLM-L6-v2)."""
-    # Reuse the singleton already defined in src/scoring/matcher.py
     try:
-        from src.scoring.matcher import _get_model  # type: ignore[import]
+        from src.scoring.matcher import _get_model
         return _get_model()
     except Exception:
-        # Fallback: load directly
-        from sentence_transformers import SentenceTransformer  # type: ignore[import]
+        from sentence_transformers import SentenceTransformer
         return SentenceTransformer("all-MiniLM-L6-v2")
 
 
@@ -140,14 +131,27 @@ def _jaccard(a: list[str], b: list[str]) -> float:
 
 
 def encode_texts(model, texts: list[str], batch_size: int = 32) -> np.ndarray:
-    """Encode a list of texts; returns (N, D) float32 array."""
+    """Encode texts; returns (N, D) float32 unit-normalised array."""
     return model.encode(
         texts,
         batch_size=batch_size,
         show_progress_bar=True,
         convert_to_numpy=True,
-        normalize_embeddings=True,  # unit vectors → dot product == cosine sim
+        normalize_embeddings=True,
     )
+
+
+def _parse_skills(raw: Any) -> list[str]:
+    """Accept either a Python list (from Supabase JSONB) or a JSON string."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, list) else []
+        except Exception:
+            return []
+    return []
 
 
 def compute_scores_for_student(
@@ -156,44 +160,32 @@ def compute_scores_for_student(
     job_ids: list[str],
     job_descriptions: list[str],
     job_skills_list: list[list[str]],
-    job_embeddings: np.ndarray,   # (N, D) pre-encoded, unit-normalised
+    job_embeddings: np.ndarray,
     model,
 ) -> list[dict]:
-    """
-    Score all jobs against one student's resume.
+    """Score all jobs against one student; returns rows for Supabase upsert."""
+    resume_text   = (student.get("resume_text") or "")[:2000]
+    resume_skills = _parse_skills(student.get("skills") or [])
+    student_id    = student["id"]
 
-    Returns a list of dicts ready for Supabase upsert.
-    """
-    resume_text = (student.get("resume_text") or "")[:2000]
-    resume_skills: list[str] = student.get("skills") or []
-    if isinstance(resume_skills, str):
-        try:
-            resume_skills = json.loads(resume_skills)
-        except Exception:
-            resume_skills = []
-
-    student_id = student["id"]
-
-    # Semantic embedding for this student's resume
     resume_emb = model.encode(
         [resume_text],
         convert_to_numpy=True,
         normalize_embeddings=True,
-    )  # shape (1, D)
+    )  # (1, D)
 
-    # Cosine similarities: (N,) because embeddings are unit-normalised
     semantic_scores = (job_embeddings @ resume_emb.T).squeeze()  # (N,)
 
     rows: list[dict] = []
-    for i, (job_id, job_skills, sem_score) in enumerate(
-        zip(job_ids, job_skills_list, semantic_scores)
+    for job_id, job_skills, sem_score in zip(
+        job_ids, job_skills_list, semantic_scores
     ):
         skill_score = _jaccard(job_skills, resume_skills)
-        fit_score = round(0.4 * skill_score + 0.6 * float(sem_score), 4)
+        fit_score   = round(0.4 * skill_score + 0.6 * float(sem_score), 4)
 
         rows.append({
             "student_id":     student_id,
-            "job_id":         job_id,
+            "job_id":         job_id,     # Supabase ID — matches scraped_jobs.id
             "fit_score":      fit_score,
             "skill_score":    round(skill_score, 4),
             "semantic_score": round(float(sem_score), 4),
@@ -207,43 +199,36 @@ def compute_scores_for_student(
 # ---------------------------------------------------------------------------
 
 def run() -> None:
-    print("="*60)
+    print("=" * 60)
     print("MCT PathAI — Multi-Student Scorer")
-    print("="*60)
+    print("=" * 60)
 
     # 1. Connect + load students
     print("\n[1/4] Connecting to Supabase...")
     client = _get_supabase()
     students = load_students(client)
     if not students:
-        print("  No students found in Supabase. Run step1_ingest_resumes.py first.")
+        print("  No students found. Run step1_ingest_resumes.py first.")
         sys.exit(0)
     print(f"  {len(students)} student(s): {[s['name'] for s in students]}")
 
-    # 2. Load jobs from SQLite
-    print("\n[2/4] Loading jobs from SQLite...")
-    jobs = load_jobs_from_sqlite()
+    # 2. Load jobs from Supabase (not SQLite) — IDs must match scraped_jobs.id
+    print("\n[2/4] Loading jobs from Supabase scraped_jobs...")
+    jobs = load_jobs_from_supabase(client)
     if not jobs:
-        print("  No jobs in SQLite. Run the scraper first.")
+        print("  No jobs in scraped_jobs. Run the scraper pipeline first.")
         sys.exit(0)
-    print(f"  {len(jobs)} jobs loaded")
+    print(f"  {len(jobs)} USA jobs loaded from Supabase")
 
-    job_ids = [j["id"] for j in jobs]
+    job_ids          = [j["id"] for j in jobs]
     job_descriptions = [(j.get("description") or "")[:2000] for j in jobs]
-    job_skills_list: list[list[str]] = []
-    for j in jobs:
-        raw = j.get("skills") or "[]"
-        try:
-            skills = json.loads(raw) if isinstance(raw, str) else raw
-            job_skills_list.append(skills if isinstance(skills, list) else [])
-        except Exception:
-            job_skills_list.append([])
+    job_skills_list  = [_parse_skills(j.get("skills") or []) for j in jobs]
 
-    # 3. Batch-encode all job descriptions (done once, shared across students)
+    # 3. Batch-encode all job descriptions once (shared across students)
     print("\n[3/4] Encoding job descriptions (all-MiniLM-L6-v2)...")
     model = _load_model()
     job_embeddings = encode_texts(model, job_descriptions, batch_size=32)
-    print(f"  Encoded {job_embeddings.shape[0]} jobs  (dim={job_embeddings.shape[1]})")
+    print(f"  Encoded {job_embeddings.shape[0]} jobs (dim={job_embeddings.shape[1]})")
 
     # 4. Score each student and upsert
     print("\n[4/4] Scoring and upserting to Supabase...")
@@ -262,28 +247,24 @@ def run() -> None:
             job_embeddings=job_embeddings,
             model=model,
         )
-
-        # Sort descending so top scores are visible in Supabase first
         score_rows.sort(key=lambda r: r["fit_score"], reverse=True)
 
-        # Batch upsert
         student_upserted = 0
         for i in range(0, len(score_rows), _UPSERT_BATCH):
             batch = score_rows[i : i + _UPSERT_BATCH]
-            upserted = upsert_scores_batch(client, batch)
-            student_upserted += upserted
+            student_upserted += upsert_scores_batch(client, batch)
             if i + _UPSERT_BATCH < len(score_rows):
                 time.sleep(_UPSERT_DELAY)
 
-        top5 = score_rows[:5]
+        top5    = score_rows[:5]
         top_str = ", ".join(f"{r['fit_score']:.3f}" for r in top5)
         print(f"    Upserted {student_upserted} scores  |  top-5: [{top_str}]")
         total_upserted += student_upserted
 
     elapsed = time.perf_counter() - t0
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Done in {elapsed:.1f}s")
-    print(f"Total upserted: {total_upserted} score rows across {len(students)} student(s)")
+    print(f"Total upserted: {total_upserted} rows across {len(students)} student(s)")
 
 
 if __name__ == "__main__":
