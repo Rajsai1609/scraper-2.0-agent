@@ -73,10 +73,10 @@ def load_jobs_from_supabase(client) -> list[dict[str, Any]]:
     """
     Return all USA jobs from Supabase scraped_jobs.
 
-    Fetches id, description, and skills — the only fields needed for
-    scoring.  Paginates in batches of 1000 to retrieve the full set.
-    Using Supabase IDs ensures student_job_scores.job_id matches
-    scraped_jobs.id for the dashboard JOIN.
+    Fetches id, title, company, location, job_category, and skills —
+    the columns that actually exist in the live table.  'description'
+    is not stored; we build a scoring text from the available fields.
+    Paginates in batches of 1000 to retrieve the full set.
     """
     all_jobs: list[dict[str, Any]] = []
     offset = 0
@@ -84,7 +84,7 @@ def load_jobs_from_supabase(client) -> list[dict[str, Any]]:
     while True:
         result = (
             client.table("scraped_jobs")
-            .select("id, description, skills")
+            .select("id, title, company, location, job_category, skills")
             .eq("is_usa_job", True)
             .range(offset, offset + _JOBS_PAGE_SIZE - 1)
             .execute()
@@ -98,6 +98,17 @@ def load_jobs_from_supabase(client) -> list[dict[str, Any]]:
 
     print()  # newline after \r
     return all_jobs
+
+
+def _job_text(job: dict[str, Any]) -> str:
+    """Build a scoring text from available fields (no description column)."""
+    parts = [
+        job.get("title") or "",
+        job.get("company") or "",
+        job.get("job_category") or "",
+        job.get("location") or "",
+    ]
+    return " ".join(p for p in parts if p)[:2000]
 
 
 def upsert_scores_batch(client, rows: list[dict]) -> int:
@@ -221,7 +232,7 @@ def run() -> None:
     print(f"  {len(jobs)} USA jobs loaded from Supabase")
 
     job_ids          = [j["id"] for j in jobs]
-    job_descriptions = [(j.get("description") or "")[:2000] for j in jobs]
+    job_descriptions = [_job_text(j) for j in jobs]
     job_skills_list  = [_parse_skills(j.get("skills") or []) for j in jobs]
 
     # 3. Batch-encode all job descriptions once (shared across students)
