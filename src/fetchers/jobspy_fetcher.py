@@ -52,6 +52,7 @@ def fetch_all_jobs() -> tuple[list[Job], dict[str, int]]:
                 location=LOCATION,
                 results_wanted=RESULTS_PER_TERM,
                 hours_old=HOURS_OLD,
+                country_indeed="usa",   # prevents invalid-country errors (cyprus, lesotho, etc.)
             )
         except Exception as exc:
             logger.warning("JobSpy error for '%s': %s", term, exc)
@@ -94,6 +95,12 @@ def _row_to_job(row: object, site: str, date_posted: Optional[datetime]) -> Opti
     location = _str(row.get("location", ""))  # type: ignore[union-attr]
     description = _str(row.get("description", ""))  # type: ignore[union-attr]
 
+    # Build a platform-native ID (e.g. linkedin-12345678, indeed-abc123).
+    # This matches the ashby-xxx / greenhouse-xxx format used by ATS fetchers
+    # and ensures the JOIN with student_job_scores works in the dashboard.
+    raw_id = _str(row.get("id"))  # type: ignore[union-attr]
+    platform_id = f"{site}-{raw_id}" if raw_id else ""
+
     # Work mode detection from JobSpy's is_remote flag
     is_remote = row.get("is_remote")  # type: ignore[union-attr]
     if is_remote is True:
@@ -104,6 +111,7 @@ def _row_to_job(row: object, site: str, date_posted: Optional[datetime]) -> Opti
         work_mode = WorkMode.UNKNOWN
 
     return Job(
+        id=platform_id,          # "" → model validator derives SHA-256 as fallback
         title=title,
         company=company,
         ats_platform=site,
