@@ -229,45 +229,50 @@ def _send_email(to_email: str, subject: str, body: str) -> bool:
 
 def send_confirmation(to_email: str, to_name: str) -> bool:
     """Email sent when the student is fully ingested and dashboard is live."""
-    subject = "You're in! Your MCT PathAI dashboard is live 🎯"
+    subject = "Your MCT PathAI Dashboard is Live! 🚀"
     body = f"""\
 Hi {to_name},
 
-Great news — your resume has been processed and your personalised \
-job dashboard is now live!
+Your personalized job dashboard is ready!
 
-View your matches at: https://mctpathai.com
+👉 Visit mctpathai.com
+Click your name to see your AI-matched jobs.
 
-Your top opportunities are ranked by AI match score, all \
-pre-filtered for your visa status.
+Your dashboard shows:
+- Jobs matched to YOUR resume daily
+- AI scores for each role
+- Visa-friendly positions only
+- Top companies: Databricks, OpenAI, MongoDB, Notion, Ramp and more
 
-Reach out any time at connect@theteammc.com if you have questions.
+Questions? Reach us:
+📧 connect@theteammc.com
+📱 +1 (206) 552-8424
+💼 linkedin.com/company/106539005
 
-— The MCT PathAI Team
-Powered by MCTechnology LLC
+Welcome to MCT PathAI!
+- Rajsai, MCTechnology LLC
 """
     return _send_email(to_email, subject, body)
 
 
 def send_waitlisted(to_email: str, to_name: str) -> bool:
     """Email sent when the beta is full and the student stays on the waitlist."""
-    subject = "You're on the MCT PathAI waitlist!"
+    subject = "You're on the MCT PathAI Waitlist!"
     body = f"""\
 Hi {to_name},
 
-Thanks for signing up for MCT PathAI!
+Thank you for signing up for MCT PathAI!
 
-We've received your resume and you're on our waitlist. \
-Our beta is currently at capacity (20 students), but we'll \
-notify you as soon as your spot opens up.
+You're on our waitlist — we'll notify you as soon as your spot opens up.
 
-In the meantime, follow us on LinkedIn for updates:
-https://www.linkedin.com/company/106539005/
+Want to move faster? Contact us directly:
+📧 connect@theteammc.com
+📱 +1 (206) 552-8424
+💼 linkedin.com/company/106539005
 
-Questions? Reach us at connect@theteammc.com.
+We typically respond within 24 hours.
 
-— The MCT PathAI Team
-Powered by MCTechnology LLC
+- Rajsai, MCTechnology LLC
 """
     return _send_email(to_email, subject, body)
 
