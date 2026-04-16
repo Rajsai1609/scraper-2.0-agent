@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from src.core import db
+from src.core import supabase_writer
 from src.core.models import Resume
 from src.core.normalizer import normalize_job
 from src.enrichment import category as cat_enricher
@@ -128,6 +129,13 @@ def scrape(
                 sheets_inserted += 1
         db.log_run(f"scrape: {sheets_inserted} new jobs inserted ({len(all_jobs)} fetched)")
         console.print(f"[bold]{sheets_inserted} new jobs saved to Google Sheets.[/bold]")
+
+    # Write-through to Supabase scraped_jobs table
+    sb_upserted, sb_errors = supabase_writer.upsert_jobs(all_jobs)
+    if sb_upserted:
+        console.print(f"[bold]{sb_upserted} jobs upserted to Supabase.[/bold]")
+    if sb_errors:
+        console.print(f"[yellow]{sb_errors} jobs failed to upsert to Supabase.[/yellow]")
 
     _print_table(all_jobs[:25])
 
@@ -247,6 +255,13 @@ def run(
         # Show total row count in Sheets
         total_in_sheets = len(db.get_jobs())
         console.print(f"\n[bold]Google Sheets: {total_in_sheets} total rows in Jobs tab.[/bold]")
+
+        # Write-through to Supabase scraped_jobs table
+        sb_upserted, sb_errors = supabase_writer.upsert_jobs(qualifying_jobs)
+        if sb_upserted:
+            console.print(f"[bold]{sb_upserted} jobs upserted to Supabase.[/bold]")
+        if sb_errors:
+            console.print(f"[yellow]{sb_errors} jobs failed to upsert to Supabase.[/yellow]")
 
 
 @app.command()
@@ -519,14 +534,24 @@ def pipeline() -> None:
 
     console.print("\n[bold cyan]--- STEP 3: Score ---[/bold cyan]")
     resume = _load_resume()
+    final_jobs = enriched
     if resume.raw_text:
         scored = score_all(enriched, resume)
         db.replace_all_jobs(scored)
         console.print(f"  [green]{len(scored)}[/green] jobs scored")
+        final_jobs = scored
     else:
         console.print("  [yellow]No resume found — skipping scoring.[/yellow]")
 
-    db.log_run(f"pipeline: {total_inserted} new jobs, {len(enriched)} enriched")
+    # Write-through to Supabase scraped_jobs table (scored jobs if available, else enriched)
+    console.print(f"\n[bold cyan]--- STEP 4: Sync to Supabase ---[/bold cyan]")
+    sb_upserted, sb_errors = supabase_writer.upsert_jobs(final_jobs)
+    if sb_upserted:
+        console.print(f"  [green]{sb_upserted}[/green] jobs upserted to Supabase scraped_jobs")
+    if sb_errors:
+        console.print(f"  [yellow]{sb_errors}[/yellow] jobs failed to upsert")
+
+    db.log_run(f"pipeline: {total_inserted} new jobs, {len(enriched)} enriched, {sb_upserted} synced to Supabase")
     console.print("\n[bold green]Pipeline complete.[/bold green]")
 
 
