@@ -89,14 +89,43 @@ def _get_client():
 # ---------------------------------------------------------------------------
 
 def fetch_all_students(client) -> list[dict[str, Any]]:
-    """Return id, name, email for every student."""
-    result = (
+    """
+    Return id, name, email for every student that has a processed waitlist row.
+
+    students table has no email column — emails live in the waitlist table.
+    We fetch both tables and join in Python on LOWER(TRIM(name)).
+    Only students whose name matches a processed waitlist row (with an email)
+    are included.
+    """
+    students_res = (
         client.table("students")
-        .select("id, name, email")
+        .select("id, name")
         .order("name")
         .execute()
     )
-    return result.data or []
+    students = students_res.data or []
+
+    waitlist_res = (
+        client.table("waitlist")
+        .select("name, email")
+        .eq("processed", True)
+        .not_.is_("email", "null")
+        .execute()
+    )
+    # Build lookup: normalised_name -> email (last processed entry wins on collision)
+    email_by_name: dict[str, str] = {
+        row["name"].lower().strip(): row["email"]
+        for row in (waitlist_res.data or [])
+        if row.get("name") and row.get("email")
+    }
+
+    result: list[dict[str, Any]] = []
+    for s in students:
+        email = email_by_name.get(s["name"].lower().strip())
+        if email:
+            result.append({"id": s["id"], "name": s["name"], "email": email})
+
+    return result
 
 
 def fetch_top_jobs(client, student_id: str, limit: int = 10) -> list[dict[str, Any]]:
