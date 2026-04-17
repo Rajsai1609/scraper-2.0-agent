@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import csv
 import re
+from pathlib import Path
 
 from src.core.models import Job
 
-KNOWN_H1B_SPONSORS: frozenset[str] = frozenset([
+_FALLBACK_H1B_SPONSORS: frozenset[str] = frozenset([
     # Big Tech
     "google", "microsoft", "amazon", "apple", "meta", "netflix",
     "ibm", "oracle", "salesforce", "adobe", "intel", "qualcomm",
@@ -21,7 +23,30 @@ KNOWN_H1B_SPONSORS: frozenset[str] = frozenset([
     "doordash", "instacart", "robinhood", "coinbase", "plaid",
     "brex", "rippling", "gusto", "chime", "affirm", "klarna",
     "square", "block", "paypal", "intuit",
+    "deloitte", "accenture", "infosys", "wipro", "capgemini",
+    "kpmg", "ey", "ernst & young", "pwc", "tcs",
+    "tata consultancy services", "cognizant", "hcl technologies",
 ])
+
+
+def _load_h1b_sponsors_from_csv() -> frozenset[str]:
+    csv_path = Path(__file__).parents[2] / "data" / "h1b_employers.csv"
+    if not csv_path.exists():
+        return _FALLBACK_H1B_SPONSORS
+    sponsors: set[str] = set()
+    try:
+        with csv_path.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = row.get("company_name", "").strip().lower()
+                if name:
+                    sponsors.add(name)
+    except Exception:
+        return _FALLBACK_H1B_SPONSORS
+    return frozenset(sponsors) if sponsors else _FALLBACK_H1B_SPONSORS
+
+
+KNOWN_H1B_SPONSORS: frozenset[str] = _load_h1b_sponsors_from_csv()
 
 _H1B_YES: list[str] = [
     r"\bwill\s+(?:provide\s+)?(?:visa\s+)?sponsorship\b",

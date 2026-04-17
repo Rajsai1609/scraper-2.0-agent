@@ -1,0 +1,612 @@
+company_name
+Google
+Microsoft
+Amazon
+Apple
+Meta
+Netflix
+IBM
+Oracle
+Salesforce
+Adobe
+Intel
+Qualcomm
+NVIDIA
+AMD
+Broadcom
+Cisco
+Stripe
+Dropbox
+Figma
+Notion
+Canva
+Asana
+Zendesk
+HubSpot
+Intercom
+Amplitude
+GitLab
+Datadog
+MongoDB
+Elastic
+Confluent
+HashiCorp
+Okta
+Twilio
+SendGrid
+Cloudflare
+Fastly
+Snowflake
+Databricks
+Palantir
+Splunk
+New Relic
+PagerDuty
+Atlassian
+Workday
+ServiceNow
+Veeva
+Zoom
+Slack
+Box
+DocuSign
+RingCentral
+LinkedIn
+Twitter
+Pinterest
+Lyft
+Uber
+Airbnb
+DoorDash
+Instacart
+Robinhood
+Coinbase
+Plaid
+Brex
+Rippling
+Gusto
+Chime
+Affirm
+Klarna
+Square
+Block
+PayPal
+Intuit
+Deloitte
+Accenture
+IBM Global Services
+Infosys
+Wipro
+Capgemini
+KPMG
+Ernst & Young
+EY
+PwC
+McKinsey
+Boston Consulting Group
+BCG
+Bain & Company
+JP Morgan
+JPMorgan Chase
+Goldman Sachs
+Morgan Stanley
+Citigroup
+Bank of America
+Wells Fargo
+BlackRock
+Vanguard
+Fidelity Investments
+Capital One
+American Express
+Mastercard
+Visa
+TCS
+Tata Consultancy Services
+Cognizant
+HCL Technologies
+Tech Mahindra
+Mphasis
+Hexaware
+Mindtree
+L&T Technology Services
+NIIT Technologies
+Persistent Systems
+Zensar Technologies
+Syntel
+Infosonics
+Virtusa
+Mastech
+iGate
+Patni Computer Systems
+Satyam
+EPAM Systems
+Globant
+Endava
+Luxoft
+SoftServe
+Intellisoft
+Thoughtworks
+IQVIA
+Conduent
+Syntel
+DXC Technology
+Hewlett Packard Enterprise
+HPE
+Dell Technologies
+Dell
+Lenovo
+Samsung
+LG Electronics
+Sony
+Panasonic
+Toshiba
+Hitachi
+Fujitsu
+NEC
+NTT Data
+Unisys
+SAP
+SAP America
+SAP Labs
+Siemens
+Siemens USA
+Bosch
+Bosch USA
+Continental
+ZF Friedrichshafen
+Daimler
+BMW
+Volkswagen
+Audi
+Mercedes-Benz
+Porsche
+Toyota
+Honda
+Nissan
+Hyundai
+Kia
+Ford
+General Motors
+Tesla
+Rivian
+Lucid Motors
+Waymo
+Cruise
+Aurora
+Argo AI
+Mobileye
+ANSYS
+PTC
+Dassault Systemes
+Autodesk
+Siemens Digital
+Rockwell Automation
+Emerson Electric
+Honeywell
+GE
+General Electric
+3M
+Eaton
+Parker Hannifin
+Illinois Tool Works
+Caterpillar
+Deere & Company
+John Deere
+Boeing
+Lockheed Martin
+Raytheon
+Northrop Grumman
+L3Harris
+General Dynamics
+BAE Systems
+Leidos
+SAIC
+CACI International
+Booz Allen Hamilton
+Jacobs Engineering
+AECOM
+Fluor
+KBR
+Burns & McDonnell
+Bechtel
+Parsons
+Turner Construction
+Gilbane
+Skanska
+CH2M
+Arup
+WSP
+Stantec
+Arcadis
+Tetra Tech
+ICF International
+Gartner
+Forrester Research
+IDC
+Nielsen
+IRI
+Kantar
+Ipsos
+Edelman
+Weber Shandwick
+Hill+Knowlton
+Burson-Marsteller
+Ogilvy
+WPP
+Publicis
+Omnicom
+Interpublic Group
+dentsu
+Havas
+Grey
+BBDO
+TBWA
+DDB
+Leo Burnett
+Saatchi & Saatchi
+Wunderman Thompson
+McCann
+Merkle
+Razorfish
+DigitasLBi
+SapientRazorfish
+Sapient
+Publicis Sapient
+IBM iX
+Slalom
+West Monroe
+Navigant
+FTI Consulting
+Analysis Group
+Cornerstone Research
+Compass Lexecon
+NERA Economic Consulting
+Huron Consulting Group
+AlixPartners
+A.T. Kearney
+Kearney
+Oliver Wyman
+Roland Berger
+Strategy&
+LEK Consulting
+Arthur D. Little
+Alvarez & Marsal
+Duff & Phelps
+Berkeley Research Group
+Charles River Associates
+Exponent
+Ramboll
+Teradata
+Informatica
+MicroStrategy
+Tableau
+Qlik
+Tibco
+SAS Institute
+Alteryx
+Domo
+Looker
+Sisense
+ThoughtSpot
+AtScale
+Incorta
+Starburst Data
+Presto
+Rockset
+SingleStore
+CockroachDB
+PlanetScale
+Neon
+Supabase
+Firebase
+AWS Amazon Web Services
+Microsoft Azure
+Google Cloud
+Alibaba Cloud
+IBM Cloud
+Oracle Cloud
+Rackspace
+DigitalOcean
+Linode
+Vultr
+OVHcloud
+Hetzner
+Scaleway
+Cloudways
+Kinsta
+WP Engine
+Shopify
+BigCommerce
+Magento
+Adobe Commerce
+Salesforce Commerce Cloud
+Oracle Commerce
+SAP Commerce Cloud
+Hybris
+VTEX
+Commercetools
+Elastic Path
+Episerver
+Sitecore
+Optimizely
+Contentful
+Contentstack
+Sanity
+Strapi
+Directus
+Ghost
+Storyblok
+Prismic
+Butter CMS
+DatoCMS
+Webflow
+Wix
+Squarespace
+Woocommerce
+PrestaShop
+OpenCart
+Volusion
+Weebly
+GoDaddy
+Namecheap
+Bluehost
+SiteGround
+DreamHost
+Network Solutions
+Register.com
+Hover
+Tucows
+Enom
+Key Systems
+LogicBoxes
+IONOS
+1&1
+Arsys
+United Internet
+Freenet
+GMX
+Web.de
+T-Online
+Deutsche Telekom
+Vodafone
+T-Mobile
+Sprint
+AT&T
+Verizon
+Comcast
+Charter
+Cox Communications
+CenturyLink
+Frontier Communications
+Windstream
+Consolidated Communications
+TDS Telecom
+Mediacom
+WideOpenWest
+RCN
+Starlink
+SpaceX
+Blue Origin
+Virgin Galactic
+Rocket Lab
+Relativity Space
+Astra
+Firefly Aerospace
+United Launch Alliance
+Northrop Grumman Innovation Systems
+Sierra Nevada Corporation
+Maxar Technologies
+Planet Labs
+Spire Global
+BlackSky
+Satellogic
+Orbital Insight
+HawkEye 360
+Capella Space
+Iceye
+Umbra
+Axelspace
+NanoAvionics
+EnduroSat
+GomSpace
+Innovative Solutions In Space
+AAC Clydespace
+Surrey Satellite Technology
+SSTL
+Thales Alenia Space
+Airbus Defence and Space
+Leonardo DRS
+OHB
+Thales
+Safran
+Diehl
+Cobham
+Curtiss-Wright
+Moog
+TransDigm
+Heico
+Ducommun
+Kaman
+Spirit AeroSystems
+Triumph Group
+Woodward
+Parker Aerospace
+Honeywell Aerospace
+Garmin
+Rockwell Collins
+UTC Aerospace Systems
+United Technologies
+Pratt & Whitney
+Collins Aerospace
+Hamilton Sundstrand
+Kidde
+Chubb
+Johnson Controls
+Tyco
+Allegion
+ASSA ABLOY
+Dormakaba
+HID Global
+Lenel Systems
+Genetec
+Milestone Systems
+Axis Communications
+Bosch Security Systems
+Hanwha Techwin
+Dahua Technology
+Hikvision
+Avigilon
+Pelco
+Vivotek
+Mobotix
+Flir Systems
+Teledyne FLIR
+Teledyne Technologies
+II-VI
+Lumentum
+Coherent
+II-VI Incorporated
+IPG Photonics
+nLIGHT
+Trumpf
+Jenoptik
+Laserline
+Rofin-Sinar
+JDSU
+Viavi Solutions
+EXFO
+Spirent Communications
+Ixia
+Keysight Technologies
+National Instruments
+NI
+Rohde & Schwarz
+Anritsu
+Tektronix
+LeCroy
+Teledyne LeCroy
+Yokogawa
+Advantest
+Teradyne
+Cohu
+Xcerra
+Unison Industries
+Astronics
+TransAct Technologies
+CUI Global
+Bel Fuse
+Power Solutions International
+Vicor Corporation
+Advanced Energy Industries
+Advanced Energy
+Calix
+ADTRAN
+Ciena
+Infinera
+Oclaro
+Lumentum
+Finisar
+II-VI
+Coherent
+Sumitomo Electric
+Fujikura
+Furukawa Electric
+Sterlite Technologies
+Prysmian Group
+Nexans
+Belden
+Amphenol
+TE Connectivity
+Molex
+JST
+Hirose Electric
+Samtec
+Souriau
+ITT Cannon
+Winchester Electronics
+Radiall
+Rosenberger
+Huber+Suhner
+Radiall
+CommScope
+Andrew
+Corning
+OFS
+Draka
+Superior Essex
+General Cable
+Southwire
+Encore Wire
+Belden
+Quabbin Wire & Cable
+Raychem
+Thermax
+RFS
+Radio Frequency Systems
+Cobham Advanced Electronic Solutions
+SRC
+L3 Technologies
+Harris Corporation
+L3Harris Technologies
+Viasat
+ViaSat
+Hughes Network Systems
+EchoStar
+EchoStar Technologies
+DISH Network
+DirecTV
+AT&T Entertainment Group
+Comcast NBCUniversal
+ViacomCBS
+CBS
+NBC
+ABC
+Fox Corporation
+Fox News
+ESPN
+Disney
+The Walt Disney Company
+Warner Bros Discovery
+Discovery
+Turner Broadcasting
+HBO
+Hulu
+Amazon Prime Video
+Apple TV+
+Netflix
+Peacock
+Paramount+
+Pluto TV
+Tubi
+Vudu
+Fandango
+Rotten Tomatoes
+IMDb
+Box Office Mojo
+Fandango Media
+National CineMedia
+Regal Cinemas
+AMC Theatres
+Cinemark
+Showcase Cinemas
+Marcus Theatres
+Harkins Theatres
+Studio Movie Grill
+Alamo Drafthouse
+iPic Entertainment
+Cinepolis
+Santikos Entertainment
+Epic Theatres
+B&B Theatres
+Emagine Entertainment
+Celebration Cinema
+Flagship Cinemas
+Bow Tie Cinemas
+National Amusements
+Carmike Cinemas
+Malco Theatres
+Georgia Theatre Company
+Spotlight Theatres
+Frank Theatres
+Regal Entertainment Group
+United Artists

@@ -17,11 +17,17 @@ SEARCH_TERMS = [
     "cloud engineer",
     "backend engineer",
     "full stack engineer",
+    "full stack developer",
+    "data scientist",
+    "devops engineer",
+    "business intelligence analyst",
+    "SAP consultant",
+    "product manager",
 ]
 
 SOURCES = ["linkedin", "indeed", "glassdoor", "zip_recruiter"]
 LOCATION = "United States"
-RESULTS_PER_TERM = 100
+RESULTS_PER_TERM = 200
 # 7 days in hours — JobSpy's hours_old parameter
 HOURS_OLD = 168
 

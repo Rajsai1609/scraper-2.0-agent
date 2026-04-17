@@ -131,7 +131,7 @@ def _load_model():
         return _get_model()
     except Exception:
         from sentence_transformers import SentenceTransformer
-        return SentenceTransformer("all-MiniLM-L6-v2")
+        return SentenceTransformer("all-mpnet-base-v2")
 
 
 def _jaccard(a: list[str], b: list[str]) -> float:

@@ -18,6 +18,7 @@ Optional:
 """
 from __future__ import annotations
 
+import csv
 import json
 import os
 import sqlite3
@@ -40,6 +41,44 @@ SQLITE_PATH = Path(os.getenv("SQLITE_PATH", "data/jobs.db"))
 
 _BATCH_SIZE = 500          # rows per upsert call (well under Supabase 1 MB limit)
 _BATCH_DELAY = 0.3         # seconds between batches to avoid rate limits
+
+_H1B_CSV = Path(__file__).parent / "data" / "h1b_employers.csv"
+
+
+def _load_h1b_sponsors() -> frozenset[str]:
+    """Load lowercase company names from data/h1b_employers.csv."""
+    if not _H1B_CSV.exists():
+        return frozenset()
+    sponsors: set[str] = set()
+    try:
+        with _H1B_CSV.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = row.get("company_name", "").strip().lower()
+                if name:
+                    sponsors.add(name)
+    except Exception:
+        pass
+    return frozenset(sponsors)
+
+
+_H1B_SPONSORS: frozenset[str] = _load_h1b_sponsors()
+
+
+def _resolve_h1b(company: str | None, existing: Any) -> bool | None:
+    """
+    Return True if company is a known H1B sponsor from the CSV.
+    Falls back to the existing scraped value if company not in CSV.
+    """
+    if company:
+        company_lower = company.strip().lower()
+        if any(
+            sponsor in company_lower or company_lower in sponsor
+            for sponsor in _H1B_SPONSORS
+        ):
+            return True
+    # Fall back to whatever the scraper detected
+    return None if existing is None else bool(existing)
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +145,7 @@ def _coerce_row(row: dict[str, Any]) -> dict[str, Any]:
         "is_usa_job":        bool(row.get("is_usa_job") or 0),
         "experience_level":  row.get("experience_level") or "unknown",
         "is_entry_eligible": bool(row.get("is_entry_eligible") or 0),
-        "h1b_sponsor":       _opt_bool(row.get("h1b_sponsor")),
+        "h1b_sponsor":       _resolve_h1b(row.get("company"), row.get("h1b_sponsor")),
         "opt_friendly":      _opt_bool(row.get("opt_friendly")),
         "stem_opt_eligible": _opt_bool(row.get("stem_opt_eligible")),
         "skills":            skills,
