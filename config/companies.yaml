@@ -64,3 +64,37 @@ companies:
     - name: Perplexity
       slug: perplexity
       url: https://jobs.ashbyhq.com/perplexity
+
+  # Enterprise / consulting firms — primarily Workday-based career portals.
+  # The workday fetcher posts to {url}/fs/searchRequest; fails gracefully if unavailable.
+  workday:
+    - name: SAP
+      slug: sap
+      url: https://sap.wd3.myworkdayjobs.com/en-US/SAP
+    - name: IBM
+      slug: ibm
+      url: https://ibm.wd12.myworkdayjobs.com/en-US/IBMExternalSite
+    - name: Microsoft
+      slug: microsoft
+      url: https://microsoft.wd1.myworkdayjobs.com/en-US/MICROSOFTEXTERNALPAGE
+    - name: Deloitte
+      slug: deloitte
+      url: https://deloitte.wd1.myworkdayjobs.com/en-US/DeloitteUSCareers
+    - name: Accenture
+      slug: accenture
+      url: https://accenture.wd3.myworkdayjobs.com/en-US/AccentureCareers
+    - name: Infosys
+      slug: infosys
+      url: https://infosys.wd3.myworkdayjobs.com/Infosys
+    - name: Wipro
+      slug: wipro
+      url: https://wipro.wd3.myworkdayjobs.com/en-US/Wipro-Careers
+    - name: Capgemini
+      slug: capgemini
+      url: https://capgemini.wd3.myworkdayjobs.com/Capgemini_Careers
+    - name: KPMG
+      slug: kpmg
+      url: https://kpmg.wd1.myworkdayjobs.com/careers
+    - name: EY
+      slug: ey
+      url: https://ey.wd5.myworkdayjobs.com/en_US/EY_External_Careers
