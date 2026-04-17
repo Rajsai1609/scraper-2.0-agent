@@ -305,7 +305,7 @@ def run() -> None:
     client = _get_client()
 
     # ── Beta limit check ─────────────────────────────────────────────────────
-    BETA_LIMIT = 20
+    BETA_LIMIT = 21
     count_res  = client.table("students").select("id", count="exact").execute()
     current_count = count_res.count or 0
 
