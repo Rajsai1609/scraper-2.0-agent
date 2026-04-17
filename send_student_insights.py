@@ -112,7 +112,7 @@ def fetch_top_jobs(client, student_id: str, limit: int = 10) -> list[dict[str, A
         )
         .eq("student_id", student_id)
         .gte("fit_score", MIN_SCORE)
-        .order("fit_score", ascending=False)
+        .order("fit_score", desc=True)
         .limit(limit)
         .execute()
     )
