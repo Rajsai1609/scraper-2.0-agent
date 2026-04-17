@@ -126,6 +126,22 @@ def extract_skills(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Duplicate guard
+# ---------------------------------------------------------------------------
+
+def student_exists(client, email: str) -> bool:
+    """Return True if a student row with this email already exists."""
+    result = (
+        client.table("students")
+        .select("id")
+        .eq("email", email)
+        .limit(1)
+        .execute()
+    )
+    return bool(result.data)
+
+
+# ---------------------------------------------------------------------------
 # Student upsert  (reuse step1 upsert, keyed on filename = "waitlist_{email}")
 # ---------------------------------------------------------------------------
 
@@ -326,6 +342,11 @@ def run() -> None:
         wid        = entry["id"]
 
         print(f"Processing: {name} <{email}>")
+
+        if student_exists(client, email):
+            print(f"  ⏭  Student with email {email} already exists — skipping.\n")
+            mark_processed(client, wid)
+            continue
 
         try:
             # 1 — Download resume
