@@ -116,3 +116,15 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/Rajsai1609/ai-carrer-ops/dispatches \
             -d '{"event_type":"run-pipeline","client_payload":{"triggered_by":"scraper"}}'
+
+      - name: Send student insights emails
+        continue-on-error: true
+        run: python send_student_insights.py
+        env:
+          PYTHONPATH: .
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
