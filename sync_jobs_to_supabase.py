@@ -190,31 +190,88 @@ def upsert_batch(client, rows: list[dict[str, Any]]) -> int:
 # H1B enrichment
 # ---------------------------------------------------------------------------
 
-def _enrich_jobs_with_h1b(client, jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Look up each job's company in h1b_employers and set visa_score/h1b_count."""
-    print("Enriching jobs with H1B sponsor data...")
-    enriched = 0
-    for job in jobs:
-        company = (job.get("company") or "").strip().upper()
-        if not company:
-            continue
+# Manual overrides for companies whose short names don't substring-match DOL records.
+_H1B_KNOWN_MAPPINGS: dict[str, str] = {
+    "CHARLES SCHWAB":  "CHARLES SCHWAB",
+    "FIDELITY":        "FIDELITY INVESTMENTS",
+    "GEICO":           "GOVERNMENT EMPLOYEES INS CO",
+    "BOOZ ALLEN":      "BOOZ ALLEN HAMILTON",
+    "EQUIFAX":         "EQUIFAX INC",
+    "INTERMOUNTAIN":   "INTERMOUNTAIN HEALTH",
+}
+
+
+def _lookup_h1b(client, company_upper: str, cache: dict[str, dict | None]) -> dict | None:
+    """
+    Return the best-matching h1b_employers row for *company_upper*, or None.
+
+    Strategy (stops at first hit):
+      1. Known-mapping override → ilike on the mapped name
+      2. Exact ilike on the full normalised name
+      3. ilike on first two words only (handles "Charles Schwab" → "CHARLES SCHWAB & CO INC")
+
+    Results are cached by company_upper to avoid duplicate DB calls in the same run.
+    """
+    if company_upper in cache:
+        return cache[company_upper]
+
+    def _query(pattern: str) -> dict | None:
         try:
             result = (
                 client.table("h1b_employers")
                 .select("visa_score, h1b_count")
-                .ilike("employer_name", f"%{company}%")
+                .ilike("employer_name", pattern)
                 .limit(1)
                 .execute()
             )
-            if result.data:
-                job["visa_score"] = result.data[0]["visa_score"]
-                job["h1b_count"]  = result.data[0]["h1b_count"]
-                if result.data[0]["visa_score"] >= 50:
-                    job["h1b_sponsor"] = True
-                enriched += 1
+            return result.data[0] if result.data else None
         except Exception:
-            pass
-    print(f"  H1B enriched {enriched}/{len(jobs)} jobs")
+            return None
+
+    row: dict | None = None
+
+    # 1. Known mapping
+    for prefix, mapped in _H1B_KNOWN_MAPPINGS.items():
+        if company_upper.startswith(prefix):
+            row = _query(f"%{mapped}%")
+            if row:
+                break
+
+    # 2. Full name substring
+    if not row:
+        row = _query(f"%{company_upper}%")
+
+    # 3. First two words
+    if not row:
+        words = company_upper.split()
+        if len(words) >= 2:
+            prefix_two = " ".join(words[:2])
+            row = _query(f"%{prefix_two}%")
+
+    cache[company_upper] = row
+    return row
+
+
+def _enrich_jobs_with_h1b(client, jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Look up each job's company in h1b_employers and set visa_score/h1b_count."""
+    print("Enriching jobs with H1B sponsor data...")
+    cache: dict[str, dict | None] = {}
+    enriched = 0
+
+    for job in jobs:
+        company = (job.get("company") or "").strip().upper()
+        if not company:
+            continue
+        row = _lookup_h1b(client, company, cache)
+        if row:
+            job["visa_score"] = row["visa_score"]
+            job["h1b_count"]  = row["h1b_count"]
+            if row["visa_score"] >= 50:
+                job["h1b_sponsor"] = True
+            enriched += 1
+
+    unique_looked_up = len(cache)
+    print(f"  H1B enriched {enriched}/{len(jobs)} jobs ({unique_looked_up} unique company lookups)")
     return jobs
 
 
