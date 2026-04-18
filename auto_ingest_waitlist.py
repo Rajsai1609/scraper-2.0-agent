@@ -188,6 +188,7 @@ def score_student(client, student: dict) -> int:
         return 0
 
     job_ids          = [j["id"] for j in jobs]
+    job_titles       = [j.get("title") or "" for j in jobs]
     job_descriptions = [_job_text(j) for j in jobs]
     job_skills_list  = [_parse_skills(j.get("skills") or []) for j in jobs]
 
@@ -198,6 +199,7 @@ def score_student(client, student: dict) -> int:
     score_rows = compute_scores_for_student(
         student=student,
         job_ids=job_ids,
+        job_titles=job_titles,
         job_descriptions=job_descriptions,
         job_skills_list=job_skills_list,
         job_embeddings=job_embeddings,
