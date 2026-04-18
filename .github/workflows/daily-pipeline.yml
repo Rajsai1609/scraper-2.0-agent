@@ -84,6 +84,20 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Update H1B employer data
+        continue-on-error: true
+        run: |
+          if [ -f data/h1b_lca_2024.xlsx ]; then
+            python scripts/process_h1b_data.py
+          else
+            python scripts/download_h1b_data.py
+            python scripts/process_h1b_data.py
+          fi
+        env:
+          PYTHONPATH: .
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
       - name: Run multi-student scorer
         continue-on-error: true
         run: python step3_multi_scorer.py

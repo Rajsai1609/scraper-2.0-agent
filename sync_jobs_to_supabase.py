@@ -154,6 +154,8 @@ def _coerce_row(row: dict[str, Any]) -> dict[str, Any]:
         "date_posted":       row.get("date_posted") or None,
         "fetched_at":        datetime.now(timezone.utc).isoformat(),
         "expires_at":        row.get("expires_at") or None,
+        "visa_score":        0,
+        "h1b_count":         0,
     }
 
 
@@ -185,6 +187,38 @@ def upsert_batch(client, rows: list[dict[str, Any]]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# H1B enrichment
+# ---------------------------------------------------------------------------
+
+def _enrich_jobs_with_h1b(client, jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Look up each job's company in h1b_employers and set visa_score/h1b_count."""
+    print("Enriching jobs with H1B sponsor data...")
+    enriched = 0
+    for job in jobs:
+        company = (job.get("company") or "").strip().upper()
+        if not company:
+            continue
+        try:
+            result = (
+                client.table("h1b_employers")
+                .select("visa_score, h1b_count")
+                .ilike("employer_name", f"%{company}%")
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                job["visa_score"] = result.data[0]["visa_score"]
+                job["h1b_count"]  = result.data[0]["h1b_count"]
+                if result.data[0]["visa_score"] >= 50:
+                    job["h1b_sponsor"] = True
+                enriched += 1
+        except Exception:
+            pass
+    print(f"  H1B enriched {enriched}/{len(jobs)} jobs")
+    return jobs
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -194,7 +228,7 @@ def run() -> None:
     print("=" * 60)
 
     # 1. Load from SQLite
-    print(f"\n[1/3] Loading jobs from {SQLITE_PATH} ...")
+    print(f"\n[1/4] Loading jobs from {SQLITE_PATH} ...")
     try:
         raw_jobs = load_jobs_from_sqlite()
     except FileNotFoundError as exc:
@@ -208,13 +242,19 @@ def run() -> None:
     print(f"  {len(raw_jobs)} jobs loaded from SQLite")
 
     # 2. Coerce rows
-    print("\n[2/3] Preparing rows for Supabase ...")
+    print("\n[2/4] Preparing rows for Supabase ...")
     coerced = [_coerce_row(r) for r in raw_jobs]
     print(f"  {len(coerced)} rows ready")
 
-    # 3. Upsert in batches
-    print("\n[3/3] Upserting to Supabase jobs table ...")
+    # 3. Connect to Supabase (reused for enrichment + upsert)
+    print("\n[3/4] Connecting to Supabase ...")
     client = _get_supabase()
+
+    # 2b. Enrich with H1B data
+    coerced = _enrich_jobs_with_h1b(client, coerced)
+
+    # 4. Upsert in batches
+    print("\n[4/4] Upserting to Supabase jobs table ...")
     total_upserted = 0
 
     for i in range(0, len(coerced), _BATCH_SIZE):
