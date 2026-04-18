@@ -28,6 +28,7 @@ import os
 import smtplib
 import sys
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
@@ -185,6 +186,18 @@ def fetch_top_jobs(client, student_id: str, limit: int = 10) -> list[dict[str, A
     return merged
 
 
+def fetch_new_jobs_since_yesterday(client) -> int:
+    """Count jobs posted since yesterday across all scraped_jobs."""
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    result = (
+        client.table("scraped_jobs")
+        .select("id", count="exact")
+        .gte("date_posted", yesterday)
+        .execute()
+    )
+    return result.count or 0
+
+
 def fetch_total_match_count(client, student_id: str) -> int:
     """Count of all score rows at or above MIN_SCORE for this student."""
     result = (
@@ -249,6 +262,7 @@ def build_email_body(
     name: str,
     stats: dict[str, Any],
     top_jobs: list[dict[str, Any]],
+    new_jobs_count: int = 0,
 ) -> str:
     display_jobs = top_jobs[:TOP_N_EMAIL]
     top_score_raw = top_jobs[0]["fit_score"] if top_jobs else 0.0
@@ -266,10 +280,12 @@ def build_email_body(
 
     advice = _action_advice(top_score_raw)
 
+    new_jobs_line = f"🆕 {new_jobs_count} new jobs since yesterday\n\n" if new_jobs_count > 0 else ""
+
     body = f"""\
 Hi {name},
 
-Here's your personalized job search insights for this week!
+{new_jobs_line}Here's your personalized job search insights for this week!
 
 📊 YOUR MATCH STATISTICS:
 - Total matched jobs: {stats['total_matches']}
@@ -327,14 +343,19 @@ def _send_email(to_email: str, subject: str, body: str) -> bool:
         return False
 
 
-def send_insights(student: dict[str, Any], stats: dict[str, Any], top_jobs: list[dict[str, Any]]) -> bool:
+def send_insights(
+    student: dict[str, Any],
+    stats: dict[str, Any],
+    top_jobs: list[dict[str, Any]],
+    new_jobs_count: int = 0,
+) -> bool:
     email = student.get("email", "")
     if not email:
         print(f"    No email on record for {student['name']} — skipping.")
         return False
 
     subject = "Your MCT PathAI Weekly Insights 🎯"
-    body = build_email_body(student["name"], stats, top_jobs)
+    body = build_email_body(student["name"], stats, top_jobs, new_jobs_count)
     return _send_email(email, subject, body)
 
 
@@ -348,6 +369,9 @@ def run() -> None:
     print("=" * 60)
 
     client = _get_client()
+
+    new_jobs_count = fetch_new_jobs_since_yesterday(client)
+    print(f"New jobs since yesterday: {new_jobs_count}")
 
     students = fetch_all_students(client)
     if not students:
@@ -379,7 +403,7 @@ def run() -> None:
             skipped += 1
             continue
 
-        ok = send_insights(student, stats, top_jobs)
+        ok = send_insights(student, stats, top_jobs, new_jobs_count)
         if ok:
             print(f"  ✅ Insights email sent → {email}\n")
             sent += 1

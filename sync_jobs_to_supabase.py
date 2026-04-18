@@ -24,6 +24,7 @@ import os
 import sqlite3
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -151,7 +152,7 @@ def _coerce_row(row: dict[str, Any]) -> dict[str, Any]:
         "skills":            skills,
         "job_category":      row.get("job_category") or "other",
         "date_posted":       row.get("date_posted") or None,
-        "fetched_at":        row.get("fetched_at") or None,
+        "fetched_at":        datetime.now(timezone.utc).isoformat(),
         "expires_at":        row.get("expires_at") or None,
     }
 
