@@ -25,6 +25,7 @@ import os
 import sys
 import smtplib
 import tempfile
+import traceback
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -116,8 +117,24 @@ def download_resume(resume_url: str, dest: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 def extract_text(path: Path) -> str:
-    from step1_ingest_resumes import extract_text as _extract
-    return _extract(path)
+    ext = path.suffix.lower()
+    if ext == ".docx":
+        try:
+            from docx import Document  # type: ignore[import]
+        except ImportError:
+            raise ImportError("python-docx not installed — run: pip install python-docx")
+        doc = Document(path)
+        return "\n".join(p.text for p in doc.paragraphs)
+    elif ext == ".pdf":
+        try:
+            from pypdf import PdfReader  # type: ignore[import]
+        except ImportError:
+            raise ImportError("pypdf not installed — run: pip install pypdf")
+        reader = PdfReader(str(path))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        return "\n".join(pages)
+    else:
+        raise ValueError(f"Unsupported resume format: {ext!r} ({path.name})")
 
 
 def extract_skills(text: str) -> list[str]:
@@ -350,23 +367,30 @@ def run() -> None:
             mark_processed(client, wid)
             continue
 
+        step = "init"
         try:
             # 1 — Download resume
+            step = "download"
             safe_name = name.lower().replace(" ", "_")
             dest      = RESUMES_DIR / safe_name
             print(f"  [1/5] Downloading resume…")
             local_path = download_resume(resume_url, dest)
-            print(f"        Saved to {local_path}")
+            print(f"        Saved to {local_path} ({local_path.suffix})")
 
             # 2 — Extract text + skills
-            print(f"  [2/5] Extracting text…")
+            step = "extract"
+            print(f"  [2/5] Extracting text ({local_path.suffix})…")
             text = extract_text(local_path)
             if not text.strip():
-                raise ValueError("Empty text extracted from resume.")
+                raise ValueError(
+                    f"Empty text extracted from {local_path.name}. "
+                    "File may be image-based, password-protected, or corrupt."
+                )
             skills = extract_skills(text)
             print(f"        {len(text)} chars, {len(skills)} skills detected")
 
             # 3 — Upsert student
+            step = "upsert"
             print(f"  [3/5] Upserting student record…")
             record = upsert_student(
                 client,
@@ -387,11 +411,13 @@ def run() -> None:
             }
 
             # 4 — Score against all jobs
+            step = "score"
             print(f"  [4/5] Scoring jobs…")
             n_scored = score_student(client, student_dict)
             print(f"        {n_scored} score rows upserted")
 
             # 5 — Mark processed + send email
+            step = "finalise"
             print(f"  [5/5] Marking processed…")
             mark_processed(client, wid)
             sent = send_confirmation(email, name)
@@ -401,7 +427,8 @@ def run() -> None:
             success += 1
 
         except Exception as exc:
-            print(f"  ❌ Failed: {exc}\n")
+            print(f"  ❌ Failed at step={step}: {type(exc).__name__}: {exc}")
+            print(f"     Traceback:\n{traceback.format_exc()}")
             failed += 1
             # Don't mark processed so it retries next run
 
