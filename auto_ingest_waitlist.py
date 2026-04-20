@@ -75,7 +75,7 @@ def fetch_pending(client) -> list[dict[str, Any]]:
     """Return waitlist rows that have a resume_url but are not yet processed."""
     result = (
         client.table("waitlist")
-        .select("id, name, email, visa_status, target_role, resume_url")
+        .select("id, name, email, visa_status, target_role, role_track, resume_url")
         .eq("processed", False)
         .not_.is_("resume_url", "null")
         .execute()
@@ -163,7 +163,8 @@ def student_exists(client, email: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def upsert_student(client, *, name: str, email: str,
-                   resume_text: str, skills: list[str]) -> dict:
+                   resume_text: str, skills: list[str],
+                   role_track: str | None = None) -> dict:
     from step1_ingest_resumes import upsert_student as _upsert
     filename = f"waitlist_{email.lower().replace('@', '_at_')}"
     return _upsert(
@@ -172,6 +173,7 @@ def upsert_student(client, *, name: str, email: str,
         filename=filename,
         resume_text=resume_text,
         skills=skills,
+        role_track=role_track or "general",
     )
 
 
@@ -359,6 +361,7 @@ def run() -> None:
         email      = entry["email"]
         resume_url = entry["resume_url"]
         wid        = entry["id"]
+        role_track = entry.get("role_track") or "general"
 
         print(f"Processing: {name} <{email}>")
 
@@ -398,6 +401,7 @@ def run() -> None:
                 email=email,
                 resume_text=text,
                 skills=skills,
+                role_track=role_track,
             )
             student_id = record.get("id", "unknown")
             print(f"        student_id={student_id}")
@@ -408,6 +412,7 @@ def run() -> None:
                 "name":        name,
                 "resume_text": text,
                 "skills":      skills,
+                "role_track":  role_track,
             }
 
             # 4 — Score against all jobs
