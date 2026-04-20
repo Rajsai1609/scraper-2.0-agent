@@ -51,7 +51,8 @@ def run() -> None:
 
         track = detect_track(skills)
 
-        client.table('students').update({'role_track': track}).eq('id', student['id']).execute()
+        payload = {'role_track': track, 'role_tracks': [track] if track != 'general' else []}
+        client.table('students').update(payload).eq('id', student['id']).execute()
 
         print(f"  {student['name']} -> {track}")
 

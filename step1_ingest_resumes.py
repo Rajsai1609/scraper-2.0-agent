@@ -141,6 +141,7 @@ def upsert_student(
     resume_text: str,
     skills: list[str],
     role_track: str | None = None,
+    role_tracks: list[str] | None = None,
 ) -> dict:
     """Upsert a student record; dedup key is `filename`."""
     payload: dict = {
@@ -151,6 +152,10 @@ def upsert_student(
     }
     if role_track:
         payload["role_track"] = role_track
+    if role_tracks:
+        payload["role_tracks"] = role_tracks
+    elif role_track and role_track != "general":
+        payload["role_tracks"] = [role_track]
     result = (
         client.table("students")
         .upsert(payload, on_conflict="filename")

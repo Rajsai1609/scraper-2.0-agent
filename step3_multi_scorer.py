@@ -65,7 +65,7 @@ def load_students(client) -> list[dict[str, Any]]:
     """Return all student rows from Supabase."""
     result = (
         client.table("students")
-        .select("id, name, resume_text, skills, role_track")
+        .select("id, name, resume_text, skills, role_track, role_tracks")
         .execute()
     )
     return result.data or []
@@ -258,13 +258,24 @@ def compute_scores_for_student(
     student_id     = student["id"]
     student_domain = _detect_student_domain(resume_text, resume_skills)
 
-    # Role track boosting — pre-compute outside the loop
-    role_track   = (student.get("role_track") or "general")
-    track_cfg    = ROLE_TRACKS.get(role_track, {})
-    t_boost      = track_cfg.get("title_boost", 0.0)
-    k_boost      = track_cfg.get("keyword_boost", 0.0)
-    track_titles = [t.lower() for t in track_cfg.get("job_titles", [])]
-    track_kws    = [k.lower() for k in track_cfg.get("keywords", [])]
+    # Multi-track boosting — union keywords/titles from all selected tracks.
+    # Prefer role_tracks array; fall back to single role_track string.
+    raw_tracks: list[str] = student.get("role_tracks") or []
+    if not raw_tracks:
+        single = student.get("role_track") or "general"
+        if single != "general":
+            raw_tracks = [single]
+
+    track_titles: list[str] = []
+    track_kws:    list[str] = []
+    max_t_boost = 0.0
+    max_k_boost = 0.0
+    for tn in raw_tracks:
+        cfg = ROLE_TRACKS.get(tn, {})
+        track_titles.extend(t.lower() for t in cfg.get("job_titles", []))
+        track_kws.extend(k.lower() for k in cfg.get("keywords", []))
+        max_t_boost = max(max_t_boost, cfg.get("title_boost", 0.0))
+        max_k_boost = max(max_k_boost, cfg.get("keyword_boost", 0.0))
 
     resume_emb = model.encode(
         [resume_text],
@@ -290,16 +301,16 @@ def compute_scores_for_student(
         if student_domain and job_dom in _DOMAIN_CONFLICTS.get(student_domain, []):
             base_score -= _DOMAIN_PENALTY
 
-        # Role track boost — title match
+        # Role track boost — title match (any of the student's tracks)
         if track_titles and any(t in job_title.lower() for t in track_titles):
-            base_score += t_boost
+            base_score += max_t_boost
 
-        # Role track boost — keyword density (≥3 keyword hits)
+        # Role track boost — keyword density across all tracks (≥3 hits)
         if track_kws:
             job_combined = (job_title + " " + " ".join(job_skills)).lower()
             kw_hits = sum(1 for k in track_kws if k in job_combined)
             if kw_hits >= 3:
-                base_score += k_boost
+                base_score += max_k_boost
 
         fit_score = round(min(1.0, max(0.0, base_score)), 4)
 
