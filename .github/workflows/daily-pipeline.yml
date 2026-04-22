@@ -25,19 +25,8 @@ jobs:
           pip install -r requirements.txt
           pip install supabase python-dotenv psycopg2-binary
 
-      # TODO(rajsai): decide whether to add SUPABASE_DATABASE_URL secret or
-      # delete this step entirely — it is "run once" schema bootstrap code
-      # that does nothing useful on daily runs once the schema exists.
-      # See: https://github.com/Rajsai1609/scraper-2.0/issues/TBD
-      - name: Apply Supabase migrations
-        continue-on-error: true
-        run: python setup_supabase.py
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
-
       - name: Auto-ingest new waitlist students
-        continue-on-error: true
+        continue-on-error: true  # SMTP optional — don't fail pipeline on email blips
         run: python auto_ingest_waitlist.py
         env:
           PYTHONPATH: .
@@ -65,13 +54,13 @@ jobs:
 
       - name: Run scorer
         if: steps.check_resume.outputs.exists == 'true'
-        continue-on-error: true
+        continue-on-error: true  # resume.txt not committed; scoring is best-effort
         run: python -m src.cli score
         env:
           PYTHONPATH: .
 
       - name: Sync jobs to Supabase
-        continue-on-error: true
+        continue-on-error: true  # downstream of scraper; transient DB blips shouldn't abort run
         run: python sync_jobs_to_supabase.py
         env:
           PYTHONPATH: .
@@ -79,7 +68,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Cleanup old jobs
-        continue-on-error: true
+        continue-on-error: true  # non-critical maintenance; stale rows are harmless
         run: python cleanup_old_jobs.py
         env:
           PYTHONPATH: .
@@ -102,7 +91,7 @@ jobs:
           DOL_QUARTER: "1"
 
       - name: Run multi-student scorer
-        continue-on-error: true
+        continue-on-error: true  # requires student data in Supabase; safe to skip if absent
         run: python step3_multi_scorer.py
         env:
           PYTHONPATH: .
@@ -143,7 +132,7 @@ jobs:
             -d '{"event_type":"run-pipeline","client_payload":{"triggered_by":"scraper"}}'
 
       - name: Send student insights emails
-        continue-on-error: true
+        continue-on-error: true  # SMTP optional — don't fail pipeline on email blips
         run: python send_student_insights.py
         env:
           PYTHONPATH: .

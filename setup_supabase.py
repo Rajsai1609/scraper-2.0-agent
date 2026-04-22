@@ -2,6 +2,12 @@
 """
 Apply all pending Supabase migrations.
 
+MANUAL USE ONLY. Run locally with DATABASE_URL set (see Usage below).
+Not wired into CI — schema is live and migrations are applied by hand
+so a solo operator keeps explicit control. See git log for removal rationale
+(commit: "ci: remove Supabase migrations step + document intentional
+continue-on-error steps").
+
 Usage:
     # Option A — direct Postgres connection (fastest):
     #   Get the URI from Supabase → Settings → Database → Connection string → URI
