@@ -117,36 +117,139 @@ def extract_skills(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# University extraction
+# University extraction — two-pass approach
 # ---------------------------------------------------------------------------
 
+# Pass 1 (strict, IGNORECASE): handles common formats like "Texas A&M University",
+# "University of Washington", "at/from X University".  Works for ~70% of resumes.
+# Uses [ \t]+ instead of \s+ between words so the match cannot hop across newlines
+# and accidentally join tech-stack words with a University keyword further down.
 _INSTITUTION_RE = re.compile(
     r"(?:"
-    r"(?:[\w&.,'\-]+(?:\s+[\w&.,'\-]+){0,5}\s+University(?:\s+of\s+[\w\s,]{1,25})?)"
-    r"|(?:University\s+of\s+[\w\s,]{1,30})"
-    r"|(?:[\w&.,'\-]+(?:\s+[\w&.,'\-]+){0,5}\s+Institute\s+of\s+Technology)"
-    r"|(?:[\w&.,'\-]+(?:\s+[\w&.,'\-]+){0,5}\s+College(?:\s+of\s+[\w\s,]{1,20})?)"
+    r"(?:[\w&.,'\-]+(?:[ \t]+[\w&.,'\-]+){0,5}[ \t]+University(?:[ \t]+of[ \t]+[ \t\w,]{1,25})?)"
+    r"|(?:University[ \t]+of[ \t]+[ \t\w,]{1,30})"
+    r"|(?:[\w&.,'\-]+(?:[ \t]+[\w&.,'\-]+){0,5}[ \t]+Institute[ \t]+of[ \t]+Technology)"
+    r"|(?:[\w&.,'\-]+(?:[ \t]+[\w&.,'\-]+){0,5}[ \t]+College(?:[ \t]+of[ \t]+[ \t\w,]{1,20})?)"
     r")",
     re.IGNORECASE,
 )
 
+# Pass 2 (loose, proper-noun only): anchored to whitespace/separators so the degree
+# field words before the comma/dash are never included in the match.  Handles patterns
+# like "B.S. in Data Analytics, Oklahoma City University" and
+# "Computer Science - University of North Texas".
+# No IGNORECASE — requires capitalized proper nouns to avoid false positives.
+_INSTITUTION_LOOSE_RE = re.compile(
+    r"(?:\s|[,\-—])\s*"      # anchor: whitespace, comma, hyphen, or em-dash
+    r"("
+    # "University of X" (e.g. "University of North Texas")
+    r"University\s+of\s+[A-Z][A-Za-z][A-Za-z\s]{1,30}"
+    # "X University [of Y]" (e.g. "Oklahoma City University", "Texas Tech University")
+    r"|[A-Z][A-Za-z&.']*(?:\s+[A-Z][A-Za-z&.']*){0,6}"
+    r"\s+University(?:\s+of\s+[A-Z][A-Za-z][A-Za-z\s]{1,25})?"
+    # "X College [of Y]" (e.g. "Concordia College", "College of Charleston")
+    r"|[A-Z][A-Za-z&.']*(?:\s+[A-Z][A-Za-z&.']*){0,6}"
+    r"\s+College(?:\s+of\s+[A-Z][A-Za-z][A-Za-z\s]{1,20})?"
+    # "X Institute of Technology"
+    r"|[A-Z][A-Za-z&.']*(?:\s+[A-Z][A-Za-z&.']*){0,6}\s+Institute\s+of\s+Technology"
+    r")",
+    re.MULTILINE,
+)
+
+# Words that cannot be the FIRST word of an institution name.
+# Includes prepositions, filler words, section headers, and months so patterns
+# like "attended X Univ", "Education University of Y", "Dec 2025 University of Z"
+# are rejected at the first-word check.  Note: "the" is handled separately
+# (strips it and retries) rather than flat-rejecting.
+_FIRST_WORD_REJECTS = frozenset({
+    "bachelor", "master", "science", "arts", "engineering", "technology",
+    "business", "administration", "information", "computer", "data",
+    "applied", "analytics", "management", "finance", "accounting",
+    "education", "skills", "summary", "experience", "certifications",
+    "of", "in", "and", "at", "from", "attended", "graduated",
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec",
+    "january", "february", "march", "april", "june", "july",
+    "august", "september", "october", "november", "december",
+})
+
+# Words that, when found in the text BEFORE the last comma, indicate the match
+# starts in a degree-field phrase rather than an institution name.
+# Excludes prepositions like "of"/"at" because they appear in valid names
+# e.g. "University of North Texas, Denton,TX".
+_PREFIX_DEGREE_WORDS = frozenset({
+    "bachelor", "master", "science", "arts", "engineering",
+    "business", "administration", "information", "computer", "data",
+    "applied", "analytics", "management", "finance", "accounting",
+})
+
+
+def _validate_institution(raw: str, *, _depth: int = 0) -> str | None:
+    """Return cleaned institution string if it passes sanity checks."""
+    # Collapse to first line — cross-line matches are never a single institution name
+    raw = raw.split("\n")[0].split("\r")[0]
+    raw = raw.strip().rstrip(".,;:()")
+    words = raw.split()
+    if len(words) < 2 or len(words) > 8 or len(raw) > 80:
+        return None
+    # First word must be a proper noun (capitalized) — rejects "attended X Univ"
+    if not words[0][0].isupper():
+        return None
+    # Strip leading "The" and retry — e.g. "The University of Memphis" → "University of Memphis"
+    if words[0].lower() == "the" and _depth == 0 and len(words) >= 3:
+        return _validate_institution(" ".join(words[1:]), _depth=1)
+    # Reject if first word is a known filler/preposition/degree word/month
+    if words[0].lower() in _FIRST_WORD_REJECTS:
+        return None
+    # Reject matches with purely numeric tokens (years, codes) — catches "Dec 2025 University"
+    if any(w.isdigit() for w in words):
+        return None
+    # If there is a comma, check that the text before the last comma does not
+    # contain degree-field content words — catches "B.S. in Computer Science, Texas Tech Univ"
+    # but allows "University of North Texas, Denton,TX" (prepositions are fine).
+    if "," in raw:
+        prefix = raw[: raw.rindex(",")]
+        if any(w.lower() in _PREFIX_DEGREE_WORDS for w in prefix.split()):
+            return None
+    return raw
+
 
 def extract_university(text: str) -> str | None:
     """
-    Extract institution name from resume text by scanning for University /
-    College / Institute of Technology keyword patterns.
+    Extract institution name from resume text using a two-pass approach.
+
+    Pass 1 — strict regex (IGNORECASE, no-newline-crossing).  Tries every match
+              in order until one passes validation.
+    Pass 2 — whitespace/separator-anchored regex requiring proper-noun capitalization;
+              catches "B.S. in X, Oklahoma City University" patterns.  Also tries
+              every match in order so that a bad first match (e.g. "Education Univ")
+              does not block a valid second match.
 
     Returns the first clean match, or None if nothing plausible is found.
     """
-    match = _INSTITUTION_RE.search(text)
-    if not match:
-        return None
-    raw = match.group(0).strip().rstrip(".,;:()")
-    words = raw.split()
-    # Reject single-word hits (e.g. bare "University") and runaway matches
-    if len(words) < 2 or len(raw) > 80:
-        return None
-    return raw
+    # Pass 1 — iterate matches so a rejected first hit doesn't block a valid one
+    pos = 0
+    while True:
+        match = _INSTITUTION_RE.search(text, pos)
+        if not match:
+            break
+        result = _validate_institution(match.group(0))
+        if result:
+            return result
+        pos = match.start() + 1
+
+    # Pass 2 — same sliding-window approach for separator-anchored patterns
+    pos = 0
+    while True:
+        match = _INSTITUTION_LOOSE_RE.search(text, pos)
+        if not match:
+            break
+        result = _validate_institution(match.group(1))
+        if result:
+            return result
+        pos = match.start() + 1
+
+    return None
 
 
 # ---------------------------------------------------------------------------
