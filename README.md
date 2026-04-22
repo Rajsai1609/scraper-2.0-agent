@@ -19,6 +19,13 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+> **CI parity**: Before running local dry-run tests, always install from a
+> fresh venv to match the CI environment exactly. Packages installed
+> globally (e.g. `openpyxl`, `pandas`) will mask missing deps in CI:
+> ```bash
+> pip install -r requirements.txt --force-reinstall
+> ```
+
 ## Usage
 
 **Scrape all companies:**
