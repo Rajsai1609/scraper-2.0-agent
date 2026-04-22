@@ -1,14 +1,12 @@
-# PLACE THIS FILE AT:
-# scraper-2.0-agent/.github/workflows/daily-pipeline.yml
-#
-# (Rename to daily-pipeline.yml and remove this comment block)
-
 name: Daily Job Pipeline
 
 on:
   schedule:
     - cron: '0 14 * * *'  # 7AM PDT daily
   workflow_dispatch:       # allow manual trigger
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   scrape-and-bridge:
@@ -27,6 +25,10 @@ jobs:
           pip install -r requirements.txt
           pip install supabase python-dotenv psycopg2-binary
 
+      # TODO(rajsai): decide whether to add SUPABASE_DATABASE_URL secret or
+      # delete this step entirely — it is "run once" schema bootstrap code
+      # that does nothing useful on daily runs once the schema exists.
+      # See: https://github.com/Rajsai1609/scraper-2.0/issues/TBD
       - name: Apply Supabase migrations
         continue-on-error: true
         run: python setup_supabase.py
@@ -58,7 +60,7 @@ jobs:
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "⚠️  WARNING: data/resume.txt not found — skipping scorer step"
+            echo "WARNING: data/resume.txt not found -- skipping scorer step"
           fi
 
       - name: Run scorer
@@ -85,7 +87,6 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Update H1B employer data
-        continue-on-error: true
         run: |
           if [ -f data/h1b_lca_2024.xlsx ]; then
             python scripts/process_h1b_data.py
@@ -97,6 +98,8 @@ jobs:
           PYTHONPATH: .
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DOL_FY: "2026"
+          DOL_QUARTER: "1"
 
       - name: Run multi-student scorer
         continue-on-error: true
