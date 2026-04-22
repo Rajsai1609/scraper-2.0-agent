@@ -75,7 +75,7 @@ def fetch_pending(client) -> list[dict[str, Any]]:
     """Return waitlist rows that have a resume_url but are not yet processed."""
     result = (
         client.table("waitlist")
-        .select("id, name, email, visa_status, target_role, role_track, role_tracks, resume_url")
+        .select("id, name, email, visa_status, target_role, role_track, role_tracks, resume_url, university")
         .eq("processed", False)
         .not_.is_("resume_url", "null")
         .execute()
@@ -142,6 +142,11 @@ def extract_skills(text: str) -> list[str]:
     return _skills(text)
 
 
+def extract_university(text: str) -> str | None:
+    from step1_ingest_resumes import extract_university as _university
+    return _university(text)
+
+
 # ---------------------------------------------------------------------------
 # Duplicate guard
 # ---------------------------------------------------------------------------
@@ -165,7 +170,8 @@ def student_exists(client, email: str) -> bool:
 def upsert_student(client, *, name: str, email: str,
                    resume_text: str, skills: list[str],
                    role_track: str | None = None,
-                   role_tracks: list[str] | None = None) -> dict:
+                   role_tracks: list[str] | None = None,
+                   university: str | None = None) -> dict:
     from step1_ingest_resumes import upsert_student as _upsert
     filename = f"waitlist_{email.lower().replace('@', '_at_')}"
     return _upsert(
@@ -176,6 +182,7 @@ def upsert_student(client, *, name: str, email: str,
         skills=skills,
         role_track=role_track or "general",
         role_tracks=role_tracks,
+        university=university,
     )
 
 
@@ -385,7 +392,7 @@ def run() -> None:
             local_path = download_resume(resume_url, dest)
             print(f"        Saved to {local_path} ({local_path.suffix})")
 
-            # 2 — Extract text + skills
+            # 2 — Extract text + skills + university
             step = "extract"
             print(f"  [2/5] Extracting text ({local_path.suffix})…")
             text = extract_text(local_path)
@@ -395,7 +402,11 @@ def run() -> None:
                     "File may be image-based, password-protected, or corrupt."
                 )
             skills = extract_skills(text)
-            print(f"        {len(text)} chars, {len(skills)} skills detected")
+            # Resume-extracted university is authoritative; fall back to form value
+            form_university: str | None = entry.get("university") or None
+            resume_university = extract_university(text)
+            university = resume_university or form_university
+            print(f"        {len(text)} chars, {len(skills)} skills detected, university={university or '—'}")
 
             # 3 — Upsert student
             step = "upsert"
@@ -408,6 +419,7 @@ def run() -> None:
                 skills=skills,
                 role_track=role_track,
                 role_tracks=role_tracks,
+                university=university,
             )
             student_id = record.get("id", "unknown")
             print(f"        student_id={student_id}")

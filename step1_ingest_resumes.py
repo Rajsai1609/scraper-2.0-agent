@@ -117,6 +117,39 @@ def extract_skills(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# University extraction
+# ---------------------------------------------------------------------------
+
+_INSTITUTION_RE = re.compile(
+    r"(?:"
+    r"(?:[\w&.,'\-]+(?:\s+[\w&.,'\-]+){0,5}\s+University(?:\s+of\s+[\w\s,]{1,25})?)"
+    r"|(?:University\s+of\s+[\w\s,]{1,30})"
+    r"|(?:[\w&.,'\-]+(?:\s+[\w&.,'\-]+){0,5}\s+Institute\s+of\s+Technology)"
+    r"|(?:[\w&.,'\-]+(?:\s+[\w&.,'\-]+){0,5}\s+College(?:\s+of\s+[\w\s,]{1,20})?)"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def extract_university(text: str) -> str | None:
+    """
+    Extract institution name from resume text by scanning for University /
+    College / Institute of Technology keyword patterns.
+
+    Returns the first clean match, or None if nothing plausible is found.
+    """
+    match = _INSTITUTION_RE.search(text)
+    if not match:
+        return None
+    raw = match.group(0).strip().rstrip(".,;:()")
+    words = raw.split()
+    # Reject single-word hits (e.g. bare "University") and runaway matches
+    if len(words) < 2 or len(raw) > 80:
+        return None
+    return raw
+
+
+# ---------------------------------------------------------------------------
 # Supabase upsert
 # ---------------------------------------------------------------------------
 
@@ -142,6 +175,7 @@ def upsert_student(
     skills: list[str],
     role_track: str | None = None,
     role_tracks: list[str] | None = None,
+    university: str | None = None,
 ) -> dict:
     """Upsert a student record; dedup key is `filename`."""
     payload: dict = {
@@ -156,6 +190,8 @@ def upsert_student(
         payload["role_tracks"] = role_tracks
     elif role_track and role_track != "general":
         payload["role_tracks"] = [role_track]
+    if university:
+        payload["university"] = university
     result = (
         client.table("students")
         .upsert(payload, on_conflict="filename")
@@ -201,15 +237,17 @@ def run() -> None:
                 continue
 
             skills = extract_skills(text)
+            university = extract_university(text)
             record = upsert_student(
                 client,
                 name=name,
                 filename=path.name,
                 resume_text=text,
                 skills=skills,
+                university=university,
             )
             student_id = record.get("id", "unknown")
-            print(f"OK  id={student_id[:8]}  skills={len(skills)}")
+            print(f"OK  id={student_id[:8]}  skills={len(skills)}  university={university or '—'}")
             inserted += 1
 
         except Exception as exc:
